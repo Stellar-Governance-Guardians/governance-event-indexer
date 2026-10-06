@@ -18,12 +18,16 @@ jobs:
       - name: required community files exist
         run: |
           missing=0
-          for f in SECURITY.md CONTRIBUTING.md CODE_OF_CONDUCT.md CODEOWNERS \
+          for f in SECURITY.md CONTRIBUTING.md CODE_OF_CONDUCT.md \
                    .github/pull_request_template.md \
                    .github/ISSUE_TEMPLATE/bug_report.md \
                    .github/ISSUE_TEMPLATE/feature_request.md; do
             if [ ! -s "$f" ]; then echo "MISSING: $f"; missing=1; fi
           done
+          # CODEOWNERS is valid at the repo root or in .github/
+          if [ ! -s CODEOWNERS ] && [ ! -s .github/CODEOWNERS ]; then
+            echo "MISSING: CODEOWNERS"; missing=1
+          fi
           test "$missing" -eq 0
       - name: org namespace only
         run: |
