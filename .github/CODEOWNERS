@@ -1,0 +1,6 @@
+# Code owners for this repository.
+#
+# Single-owner phase (2026-10): the org `maintainers` team has one member.
+# When a second maintainer joins, add them to the team and raise the required
+# approvals for `main` from 0 to 1 in the same change (see CONTRIBUTING.md).
+* @Stellar-Governance-Guardians/maintainers
