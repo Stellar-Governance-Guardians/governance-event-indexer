@@ -1,0 +1,39 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  charter:
+    name: charter rules
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: required community files exist
+        run: |
+          missing=0
+          for f in SECURITY.md CONTRIBUTING.md CODE_OF_CONDUCT.md CODEOWNERS \
+                   .github/pull_request_template.md \
+                   .github/ISSUE_TEMPLATE/bug_report.md \
+                   .github/ISSUE_TEMPLATE/feature_request.md; do
+            if [ ! -s "$f" ]; then echo "MISSING: $f"; missing=1; fi
+          done
+          test "$missing" -eq 0
+      - name: org namespace only
+        run: |
+          bad=$(grep -rEoh 'https?://(api\.)?github\.com/(repos/)?[A-Za-z0-9_.-]+' --include='*.md' --include='*.json' --include='*.yml' --include='*.yaml' --include='*.toml' --include='*.graphql' . | sed 's|https://api\.github\.com/repos/|https://github.com/|' | grep -vE '^https?://github\.com/Stellar-Governance-Guardians$' || true)
+          if [ -n "$bad" ]; then echo "FAIL: non-org GitHub URLs:"; echo "$bad"; exit 1; fi
+      - name: no personal account names in tracked sources
+        run: |
+          # Name fragments keep this file from matching itself.
+          n1='ojuotimi'; n2='932'; n3='dawnaurora'; n4='25'; n5='aigbagb'; n6='obila'
+          names="${n1}${n2}|${n3}${n4}|${n5}${n6}"
+          if grep -rniE --exclude-dir=.git "$names" --include='*.md' --include='*.json' --include='*.yml' --include='*.yaml' --include='*.toml' . ; then
+            echo "FAIL: personal account name in tracked sources"; exit 1
+          fi
