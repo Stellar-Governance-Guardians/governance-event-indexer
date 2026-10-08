@@ -44,11 +44,15 @@ jobs:
           # Scan tracked first-party files only (git ls-files, so untracked
           # node_modules/.pgdata cannot affect local runs) and skip the
           # generated dependency lockfile (third-party registry URLs, not ours).
+          # Allow-list: upstream governor sources cited as deployment provenance
+          # in the vendored deployments.json (both are org accounts, mirroring
+          # the parser repo's identical allow-list). Personal accounts are
+          # never allowed.
           bad=$(git ls-files -z -- '*.md' '*.json' '*.yml' '*.yaml' '*.toml' '*.graphql' \
             | grep -zv 'package-lock\.json' \
             | xargs -0 -r grep -Eoh 'https?://(api\.)?github\.com/(repos/)?[A-Za-z0-9_.-]+' 2>/dev/null \
             | sed 's|https://api\.github\.com/repos/|https://github.com/|' \
-            | grep -vE '^https?://github\.com/Stellar-Governance-Guardians$' || true)
+            | grep -vE '^https?://github\.com/(Stellar-Governance-Guardians|script3|OpenZeppelin)$' || true)
           if [ -n "$bad" ]; then echo "FAIL: non-org GitHub URLs:"; echo "$bad"; exit 1; fi
       - name: no personal account names in tracked sources
         run: |
@@ -95,6 +99,8 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Interface contract: pins must not drift (offline, deterministic).
+      - run: node scripts/check-pins.mjs
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
