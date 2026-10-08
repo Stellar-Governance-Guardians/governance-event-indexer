@@ -1,0 +1,24 @@
+# Local development stack. Postgres only — the indexer itself runs on the host
+# (`npm run build && node dist/cli.js ...`) so iteration stays fast.
+#
+# The password below is a *local throwaway*, not a secret: it only exists in
+# this file and only guards a container on your own machine. The real
+# DATABASE_URL (staging/production) comes from env vars / Codespaces secrets,
+# never from a file (charter rule 5).
+services:
+  postgres:
+    image: postgres:16
+    container_name: sgg-indexer-postgres
+    environment:
+      POSTGRES_USER: indexer
+      POSTGRES_PASSWORD: indexer-local-only
+      POSTGRES_DB: indexer
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U indexer -d indexer"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - ./.pgdata:/var/lib/postgresql/data
