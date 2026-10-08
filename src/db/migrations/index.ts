@@ -1,6 +1,7 @@
 import { Migrator, type Kysely, type Migration, type MigrationProvider } from 'kysely';
 import type { Database } from '../index.js';
 import { up as init0001 } from './0001_init.js';
+import { up as ingest0002 } from './0002_ingest.js';
 
 /**
  * Static migration registry. Deliberately not fs-scanning (FileMigrationProvider):
@@ -12,6 +13,7 @@ import { up as init0001 } from './0001_init.js';
  */
 const migrations: Record<string, Migration> = {
   '0001_init': { up: init0001 },
+  '0002_ingest': { up: ingest0002 },
 };
 
 const provider: MigrationProvider = {
