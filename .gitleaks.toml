@@ -1,0 +1,16 @@
+# gitleaks configuration (charter rule 6: run gitleaks before every push).
+#
+# Requires gitleaks >= 8.21: the `[[allowlists]]` (plural) form below is only
+# understood by newer builds. CI and the devcontainer pin 8.30.1
+# (docker image zricethezav/gitleaks:v8.30.1 in CI).
+#
+# Extends the default ruleset. Any entry added under [[allowlists]] must be a
+# *verified* false positive or a non-repository artifact, with the reasoning in
+# its `description`, scoped to the narrowest possible path + regex. No blanket
+# exclusions over first-party source, fixtures, or docs.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "local working-tree artifacts that are never tracked (gitignored): the Postgres data volume and installed dependencies"
+paths = ['''^\.pgdata/''', '''^node_modules/''']
