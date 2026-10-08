@@ -20,11 +20,13 @@ Required checks for this repository:
 
 | check | verifies |
 |---|---|
-| `charter rules` | required community files present, org-namespace URLs only, no personal account names in tracked sources |
+| `charter rules` | required community files present, no fixture imports in `src/`, org-namespace URLs only, no personal account names in tracked sources, gitleaks clean (history + worktree), claims ledger offline tier |
+| `typecheck / lint / unit / integration / build` | strict TypeScript, ESLint, unit tests (offline), migrations-from-empty + schema tests against a Postgres 16 service container, `dist/` build |
 
-This repository is a stub during Step 0. Its real CI (TypeScript strict build,
-tests, Postgres integration, GraphQL contract test) lands in Phase 2 and is
-added to the required-checks list in the same change.
+The gate is **offline and deterministic**: no PR-gate step contacts the
+live testnet. Live-testnet checks run only in a nightly/manual workflow and
+never block merges. The GraphQL schema-contract test joins this list when the
+GraphQL milestone (I4) lands.
 
 ## Workflow
 

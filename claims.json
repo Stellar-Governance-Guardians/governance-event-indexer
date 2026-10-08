@@ -1,0 +1,113 @@
+{
+  "$comment": "Claims ledger (charter rule 7). Every machine-checkable claim in README.md/SPEC.md appears here with the exact command that verifies it. scripts/check-claims.sh runs each `check.cmd` with bash; exit 0 = claim holds. Two tiers: PR gate runs OFFLINE=1 (deterministic only); the live tier (nightly/manual workflow) runs ONLINE_ONLY=1 and never blocks merges. `online: true` claims hit live testnet and are skipped in the PR gate — as SKIP, never PASS.",
+  "claims": [
+    {
+      "id": "node-24-engine",
+      "claim": "the package requires Node >= 24",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "grep -q '\"node\": \">=24\"' package.json"
+      }
+    },
+    {
+      "id": "devcontainer-node-24",
+      "claim": "the devcontainer provisions Node 24 (with docker-in-docker, Postgres client and gitleaks)",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "grep -q 'features/node:1' .devcontainer/devcontainer.json && grep -q '\"version\": \"24\"' .devcontainer/devcontainer.json && grep -q 'docker-in-docker' .devcontainer/devcontainer.json && grep -q 'postgresql-client' .devcontainer/devcontainer.json && grep -q 'gitleaks' .devcontainer/post-create.sh"
+      }
+    },
+    {
+      "id": "postgres-16-compose",
+      "claim": "docker-compose.yml pins postgres:16",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "grep -q 'image: postgres:16' docker-compose.yml"
+      }
+    },
+    {
+      "id": "strict-typecheck",
+      "claim": "tsc --noEmit passes under the strict flag set",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "npm run typecheck"
+      }
+    },
+    {
+      "id": "eslint-clean",
+      "claim": "eslint . passes",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "npm run lint"
+      }
+    },
+    {
+      "id": "unit-tests",
+      "claim": "unit tests pass offline (no database, no network)",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "npm run test:unit"
+      }
+    },
+    {
+      "id": "integration-migrations-from-empty",
+      "claim": "forward-only migrations apply from an empty database, are idempotent, and round-trip through Postgres — local Postgres only, no testnet (requires DATABASE_URL)",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "npm run test:integration"
+      }
+    },
+    {
+      "id": "no-fixture-imports-in-src",
+      "claim": "production code in src/ never references fixtures (charter rule 1)",
+      "statedIn": ["README.md", "CONTRIBUTING.md"],
+      "online": false,
+      "check": {
+        "cmd": "! grep -rn 'fixtures/' src/ --include='*.ts'"
+      }
+    },
+    {
+      "id": "license-mit",
+      "claim": "LICENSE is the MIT license, copyright 2026 Stellar-Governance-Guardians",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "head -1 LICENSE | grep -q 'MIT License' && grep -q 'Copyright (c) 2026 Stellar-Governance-Guardians' LICENSE"
+      }
+    },
+    {
+      "id": "gitleaks-pinned",
+      "claim": "gitleaks 8.30.1 is pinned in the devcontainer bootstrap and the CI gate",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "grep -q 'GITLEAKS_VERSION=\"8.30.1\"' .devcontainer/post-create.sh && grep -q 'zricethezav/gitleaks:v8.30.1' .github/workflows/ci.yml"
+      }
+    },
+    {
+      "id": "pr-gate-offline",
+      "claim": "the PR-gate workflow (.github/workflows/ci.yml) never contacts the testnet (no RPC endpoint appears in it)",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "! grep -rn 'soroban-testnet' .github/workflows/ci.yml"
+      }
+    },
+    {
+      "id": "ci-check-names",
+      "claim": "CI defines the two required checks documented in CONTRIBUTING.md: 'charter rules' and 'typecheck / lint / unit / integration / build'",
+      "statedIn": ["CONTRIBUTING.md"],
+      "online": false,
+      "check": {
+        "cmd": "grep -q 'name: charter rules' .github/workflows/ci.yml && grep -q 'name: typecheck / lint / unit / integration / build' .github/workflows/ci.yml"
+      }
+    }
+  ]
+}
