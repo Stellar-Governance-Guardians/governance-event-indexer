@@ -36,6 +36,14 @@ export default tseslint.config(
     },
   },
   {
+    // Node globals for plain-JS scripts (TS files get these via the
+    // typescript-eslint override; no-undef does not apply there).
+    files: ['**/*.mjs'],
+    languageOptions: {
+      globals: { console: 'readonly', process: 'readonly', Buffer: 'readonly' },
+    },
+  },
+  {
     // Charter rule 1: production code never references test fixtures.
     // CI double-checks with a plain grep over src/ (defense in depth).
     files: ['src/**/*.ts'],
