@@ -1,5 +1,8 @@
 name: ci
 
+# PR gate: OFFLINE and deterministic — no live testnet anywhere in this file
+# (charter/process rule: live-testnet checks run only in a nightly/manual
+# workflow and never block merges).
 on:
   pull_request:
   push:
@@ -29,15 +32,79 @@ jobs:
             echo "MISSING: CODEOWNERS"; missing=1
           fi
           test "$missing" -eq 0
+      # Charter rule 1: production code never references fixtures (the eslint
+      # no-restricted-imports rule is the same guard at lint time).
+      - name: no fixture imports in production code
+        run: |
+          if grep -rn 'tests/fixtures\|fixtures/' src/ --include='*.ts'; then
+            echo "FAIL: production code references fixtures"; exit 1
+          fi
       - name: org namespace only
         run: |
-          bad=$(grep -rEoh 'https?://(api\.)?github\.com/(repos/)?[A-Za-z0-9_.-]+' --include='*.md' --include='*.json' --include='*.yml' --include='*.yaml' --include='*.toml' --include='*.graphql' . | sed 's|https://api\.github\.com/repos/|https://github.com/|' | grep -vE '^https?://github\.com/Stellar-Governance-Guardians$' || true)
+          # Scan tracked first-party files only (git ls-files, so untracked
+          # node_modules/.pgdata cannot affect local runs) and skip the
+          # generated dependency lockfile (third-party registry URLs, not ours).
+          bad=$(git ls-files -z -- '*.md' '*.json' '*.yml' '*.yaml' '*.toml' '*.graphql' \
+            | grep -zv 'package-lock\.json' \
+            | xargs -0 -r grep -Eoh 'https?://(api\.)?github\.com/(repos/)?[A-Za-z0-9_.-]+' 2>/dev/null \
+            | sed 's|https://api\.github\.com/repos/|https://github.com/|' \
+            | grep -vE '^https?://github\.com/Stellar-Governance-Guardians$' || true)
           if [ -n "$bad" ]; then echo "FAIL: non-org GitHub URLs:"; echo "$bad"; exit 1; fi
       - name: no personal account names in tracked sources
         run: |
-          # Name fragments keep this file from matching itself.
+          # Name fragments keep this file from matching itself. Tracked files
+          # only — same rationale as the check above.
           n1='ojuotimi'; n2='932'; n3='dawnaurora'; n4='25'; n5='aigbagb'; n6='obila'
           names="${n1}${n2}|${n3}${n4}|${n5}${n6}"
-          if grep -rniE --exclude-dir=.git "$names" --include='*.md' --include='*.json' --include='*.yml' --include='*.yaml' --include='*.toml' . ; then
+          if git ls-files -z -- '*.md' '*.json' '*.yml' '*.yaml' '*.toml' \
+            | xargs -0 -r grep -niE "$names" ; then
             echo "FAIL: personal account name in tracked sources"; exit 1
           fi
+      # Charter rule 5: no secrets, full history + worktree. Pinned image tag;
+      # config auto-discovered at /repo/.gitleaks.toml (target-path rule).
+      - name: gitleaks (no secrets, history + worktree)
+        run: |
+          docker run --rm -v "$PWD":/repo:ro zricethezav/gitleaks:v8.30.1 \
+            git --redact --no-banner --exit-code 1 /repo
+          docker run --rm -v "$PWD":/repo:ro zricethezav/gitleaks:v8.30.1 \
+            dir --redact --no-banner --exit-code 1 /repo
+
+  quality:
+    name: typecheck / lint / unit / integration / build
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: indexer
+          POSTGRES_PASSWORD: indexer-local-only
+          POSTGRES_DB: indexer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U indexer -d indexer"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgres://indexer:indexer-local-only@localhost:5432/indexer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      - name: unit tests (offline)
+        run: npm run test:unit
+      - name: integration tests (local Postgres only)
+        run: npm run test:integration
+      # Charter rule 7: claims ledger — machine-checked README/SPEC claims.
+      # PR gate tier: offline/deterministic claims only, skips reported as SKIP.
+      # Runs after the explicit steps above so failures are attributed once,
+      # with full context (deps + Postgres) available to every claim command.
+      - name: claims ledger (offline tier)
+        run: OFFLINE=1 bash scripts/check-claims.sh
