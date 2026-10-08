@@ -1,0 +1,136 @@
+# Soroban Governance — GraphQL SDL v1
+# Single source of truth shared by governance-event-indexer (server) and
+# delegate-portal-dashboard (client). Field names mirror schema-v1.json.
+# Bumping this version requires a schema.lock update in every consumer repo.
+
+schema {
+  query: Query
+}
+
+enum DecodingStatus {
+  """Names verified against the contract's contractspecv0 section."""
+  VERIFIED
+  """Raw ScVal passthrough; spec unavailable or governor unrecognized."""
+  UNVERIFIED
+}
+
+enum RiskTier {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  UNVERIFIED
+}
+
+type RiskClassification {
+  tier: RiskTier!
+  """The exact published rule that matched, or the exact reason for UNVERIFIED.
+  Classifications are data, not verdicts — the rule is always exposed."""
+  matchedRule: String!
+  verified: Boolean!
+}
+
+type DecodedCall {
+  contractId: String!
+  functionName: String!
+  """JSON: named object when decoding=VERIFIED, positional array when UNVERIFIED."""
+  arguments: JSON!
+  decoding: DecodingStatus!
+  risk: RiskClassification!
+}
+
+type DecodedProposal {
+  """Adapter id, or the literal 'unverified'. Never guessed."""
+  governor: String!
+  proposalId: String!
+  proposer: String
+  calls: [DecodedCall!]!
+  decoding: DecodingStatus!
+}
+
+type NormalizedEvent {
+  governor: String!
+  topics: [String!]!
+  ledger: Int!
+  txHash: String!
+  contractId: String!
+  payload: JSON!
+  decoding: DecodingStatus!
+}
+
+"""Dry-run simulation output. ALWAYS an estimate (charter rule 5): it runs
+against the current ledger, not the future execution ledger. Timelocks and
+state changes between now and execution can alter the real result."""
+type ExecutionImpact {
+  estimate: Boolean!
+  simulatedAtLedger: Int!
+  cpuInstructions: String
+  memoryBytes: String
+  minResourceFeeStroops: String
+  """null when the RPC returned no state changes; absence is meaningful."""
+  stateChanges: JSON
+  decodeStatus: DecodingStatus!
+}
+
+"""Delegate metric: raw counts + published formula. No composite scores."""
+type DelegateMetrics {
+  delegate: String!
+  """Number of governance votes cast by this delegate that we indexed."""
+  votesCast: Int!
+  """Number of proposals that were open while this delegate held voting power."""
+  proposalsEligible: Int!
+  """votesCast / proposalsEligible. Inputs are exposed above; formula published
+  in docs. A ratio, not a verdict."""
+  participationRatio: Float
+  delegatedPower: String!
+}
+
+scalar JSON
+
+type Query {
+  """Governance events indexed from live testnet, oldest first."""
+  events(
+    contractId: String
+    fromLedger: Int
+    toLedger: Int
+    first: Int = 50
+    after: String
+  ): EventConnection!
+
+  proposal(proposalId: String!, governorContract: String!): DecodedProposal
+
+  """Dry-run impact estimate for a proposal. Every field is labeled estimate."""
+  executionImpact(proposalId: String!, governorContract: String!): ExecutionImpact!
+
+  delegateMetrics(delegate: String!): DelegateMetrics!
+
+  """Indexer health: cursor position, RPC retention window, lag. Fail-loud:
+  a stale or broken indexer surfaces here, never as an empty result set."""
+  indexerHealth: IndexerHealth!
+}
+
+type IndexerHealth {
+  """Last ledger the indexer successfully processed."""
+  cursorLedger: Int!
+  latestLedger: Int!
+  oldestLedger: Int!
+  """Retention window of the RPC in use, as reported by getHealth."""
+  ledgerRetentionWindow: Int!
+  lagLedgers: Int!
+  healthy: Boolean!
+}
+
+type EventConnection {
+  edges: [EventEdge!]!
+  pageInfo: PageInfo!
+}
+
+type EventEdge {
+  cursor: String!
+  node: NormalizedEvent!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  endCursor: String
+}

@@ -1,0 +1,6 @@
+{
+  "$comment": "Pin for the parser WASM package (interface contract: {version, assetUrl, sha256}). The asset is vendored at vendor/<asset filename> so decode tests run offline; sha256(vendored) must equal this value (PR gate). Nightly re-downloads assetUrl and fails on drift or an unreachable pin. Corroborated by the parser's releases/parser-wasm.lock.json at tag v0.1.0-alpha.1.",
+  "version": "0.1.0-alpha.1",
+  "assetUrl": "https://github.com/Stellar-Governance-Guardians/soroban-governance-parser/releases/download/v0.1.0-alpha.1/sgg-parser-wasm-0.1.0-alpha.1.tgz",
+  "sha256": "7b2eb9420f0cf0582d079f9603beb1e8548e1c7bac165724688cbae5b9237ecd"
+}

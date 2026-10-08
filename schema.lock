@@ -1,0 +1,7 @@
+{
+  "$comment": "Pin for the vendored GraphQL SDL (interface contract). `path` is relative to parserRepo at commitSha. PR gate verifies sha256 offline (scripts/check-pins.mjs); the nightly workflow verifies the pinned raw URL still resolves with identical bytes. Bump only by a PR that shows the diff and re-runs contract tests.",
+  "parserRepo": "https://github.com/Stellar-Governance-Guardians/soroban-governance-parser",
+  "commitSha": "ba3bf1a3ee7525215f3d3e919974f8b7fbaf0b74",
+  "path": "schemas/governance-v1.graphql",
+  "sha256": "cfbd85a82ee834ac14723cd5dd73ce18a5aba0313a91a0aaf6053d1a486ae275"
+}

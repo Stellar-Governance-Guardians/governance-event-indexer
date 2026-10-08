@@ -1,0 +1,7 @@
+{
+  "$comment": "Pin for the vendored governor deployment registry (same pin pattern as schema.lock). The raw registry feeds ingestion via src/registry; an env override (GOVERNOR_REGISTRY_OVERRIDE) can extend it at runtime but never replaces the pinned provenance. PR gate verifies sha256 offline; nightly verifies the pinned raw URL resolves.",
+  "parserRepo": "https://github.com/Stellar-Governance-Guardians/soroban-governance-parser",
+  "commitSha": "ba3bf1a3ee7525215f3d3e919974f8b7fbaf0b74",
+  "path": "deployments.json",
+  "sha256": "b8c71c34bd5bdd64183b6dae39bdbcd0641a5d8d7084cc751925f4e7e14a3a6d"
+}
