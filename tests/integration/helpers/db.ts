@@ -9,7 +9,7 @@ import { Pool } from 'pg';
  * Requires a Postgres superuser-ish URL (the docker-compose / CI service
  * user is one). Fails loud if DATABASE_URL is missing: no silent skips.
  */
-export async function withTempDatabase(fn: (url: string) => Promise<void>): Promise<void> {
+export async function withTempDatabase<T>(fn: (url: string) => Promise<T>): Promise<T> {
   const base = process.env['DATABASE_URL'];
   if (base === undefined || base === '') {
     throw new Error(
@@ -50,7 +50,7 @@ export async function withTempDatabase(fn: (url: string) => Promise<void>): Prom
     await admin.query(`CREATE DATABASE "${dbName}"`);
     target.pathname = `/${dbName}`;
     try {
-      await fn(target.toString());
+      return await fn(target.toString());
     } finally {
       await waitForCleanTeardown();
       await admin.query(`DROP DATABASE IF EXISTS "${dbName}" WITH (FORCE)`);
