@@ -1,0 +1,32 @@
+name: nightly-pins
+
+# Unreachable-pin check (interface contract: "CI fails on drift or unreachable
+# pins"). The offline half (drift: vendored bytes vs lock hashes) runs in the
+# PR gate via scripts/check-pins.mjs; this workflow runs the ONLINE half:
+# the pinned upstream URLs must still resolve with identical bytes.
+#
+# Nightly/manual only — no PR trigger in this file (claim
+# `nightly-pins-workflow` enforces that) and it never blocks merges
+# (charter/process: live-network checks never gate the PR path).
+
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pins:
+    name: pinned parser URLs resolve + hash-match
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: check pins online
+        run: node scripts/check-pins.mjs --online
