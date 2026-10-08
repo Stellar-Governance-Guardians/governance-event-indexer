@@ -144,6 +144,24 @@
       "check": {
         "cmd": "node scripts/check-pins.mjs --online"
       }
+    },
+    {
+      "id": "replay-fixture-pinned",
+      "claim": "the replay fixture is byte-identical (sha256) to the parser repo's raw getEvents capture at the pinned commit",
+      "statedIn": ["README.md", "tests/fixtures/README.md"],
+      "online": false,
+      "check": {
+        "cmd": "echo 'f6da47ea6873e362bb6ce88c1ca25bfe6ed4b198c03a22854597609a0b4d2b25  tests/fixtures/replay/phase1-fixture-events.json' | sha256sum -c -"
+      }
+    },
+    {
+      "id": "ingestion-integration",
+      "claim": "the full ingestion lifecycle passes against Postgres: <=1000-ledger windows, idempotent keyed upserts, restart-safety convergence, explicit retention gaps, and fixture replay tagged source=fixture-replay — local Postgres only, no testnet",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "npm run test:integration"
+      }
     }
   ]
 }

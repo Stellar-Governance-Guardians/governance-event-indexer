@@ -10,36 +10,57 @@ Part of the Stellar-Governance-Guardians suite:
 **[indexer](https://github.com/Stellar-Governance-Guardians/governance-event-indexer)** →
 [dashboard](https://github.com/Stellar-Governance-Guardians/delegate-portal-dashboard).
 
-## Status: I0 scaffold + I1 pins — not yet an indexer
+## Status: I0 scaffold + I1 pins + I2 ingestion — not yet an API
 
-This repository currently contains the **baseline milestone (I0)** and the
-**pins milestone (I1)**: toolchain, database migrations, CI gate, repo hygiene,
-and vendored, hash-locked artifacts from the parser repo. The ingestion,
-decode, GraphQL, reconciliation and deployment milestones (I2–I7) are not built
-yet. Nothing in this repository has been verified against live testnet *by this
-repository's own evidence* yet; the statements below say exactly what has been
-checked and how.
+This repository currently contains the **baseline (I0)**, **pins (I1)** and
+**ingestion (I2)** milestones: toolchain, database migrations, CI gate, repo
+hygiene, vendored hash-locked artifacts from the parser repo, and live-raw
+event ingestion with cursors, gap detection and fixture replay. Decode (I3),
+the GraphQL API (I4), reconciliation (I5), deployment (I6) and the prove
+script (I7) are not built yet. This repo's own claims are exactly what the
+checks below verify — nothing more.
 
-## What it will do (planned, I1–I7)
+## What it will do next (planned, I3–I7)
 
-- **Ingest** `getEvents` from the public testnet RPC for the governor contracts
-  in the pinned deployment registry, in ≤1000-ledger windows, persisting raw
-  events first (idempotent, restart-safe, with explicit `ingest_gaps` rows when
-  the RPC retention window has been passed — never a silent skip).
 - **Decode** raw events through the pinned `soroban-governance-parser` WASM
   package (Script3 adapter) into proposals, actions, risk flags, votes, power
   checkpoints, delegations and delegates. Decode failures are stored and
   replayable, never dropped.
 - **Serve** the vendored `governance-v1` GraphQL schema (Yoga) with depth and
   complexity limits, delegate metrics as raw counts plus published formulas
-  (see [SPEC.md](SPEC.md) — no opaque scores), and an `indexerStatus`-style
+  (SPEC.md lands with I4 — no opaque scores), and an `indexerStatus`-style
   health surface that reports lag, open gaps and reconciliation drift.
 - **Reconcile** SQL tallies against on-chain reads and fail health checks on
   nonzero drift or excess lag.
 - **Deploy** via Docker image + compose for a small VPS or hosted Postgres
   (the 72h soak run must not live in a sleeping Codespace).
 
-## What I0 + I1 provide (proven — machine-checked)
+## What it does now
+
+### Ingestion (I2, built)
+
+- **Registry**: the pinned `deployments.json` (see `registry.lock`), hash-
+  verified on every load; `GOVERNOR_REGISTRY_OVERRIDE` adds contract ids at
+  runtime (comma-separated strkeys, validated at startup — fail closed).
+- **Cursors**: one persisted cursor per registered contract
+  (`ingest_cursors`), initialized at the start of the RPC's retention window.
+- **Windows**: `getEvents` in ranges of **≤1000 ledgers** (the public RPC
+  times out on wider ranges; `INGEST_WINDOW_LEDGERS` is capped at 1000 and
+  rejected above it), with paging and bounded exponential backoff + jitter.
+- **Storage**: raw events land first in `raw_events`, keyed
+  `(ledger, tx_hash, op_index, event_index)` with idempotent
+  insert-on-conflict-do-nothing, and each window commits together with its
+  cursor advance — a killed process re-fetches and converges.
+- **Retention gaps**: if a cursor is behind the RPC's oldest ledger, the
+  unreadable range is written to `ingest_gaps` (reason `retention`) and the
+  cursor advances past it in the same transaction — loud, never a silent
+  skip. (`/health` surfacing lands with I5.)
+- **Fixture replay**: `node dist/cli.js replay <dir>` replays committed raw
+  `getEvents` responses through the **same normalization path**, tagging rows
+  `source='fixture-replay'`; live rows are `source='live'`. Replay never
+  touches cursors, and a row's source is never flipped by a later write.
+
+## What I0 + I1 + I2 provide (proven — machine-checked)
 
 Every claim in this section is an entry in [claims.json](claims.json), checked
 by `scripts/check-claims.sh` in CI (offline tier; skips print as SKIP, never
@@ -59,6 +80,10 @@ PASS):
 | `gitleaks-pinned` | gitleaks 8.30.1 pinned in the devcontainer and the CI gate |
 | `pr-gate-offline` | the PR-gate workflow never references a testnet RPC endpoint |
 | `pins-match` | every vendored artifact hash-matches its pin (`schema.lock` / `registry.lock` / `parser.lock`), offline |
+| `pin-commit-sha` | the parser commit SHA shown in README's pin table is the SHA in `schema.lock` / `registry.lock` |
+| `nightly-pins-workflow` | a nightly/manual workflow runs the online pin check and has no PR trigger |
+| `replay-fixture-pinned` | the replay fixture is byte-identical (sha256) to the parser repo's raw capture at the pinned commit |
+| `ingestion-integration` | the full ingestion lifecycle passes against Postgres: ≤1000-ledger windows, idempotent keyed upserts, restart-safety convergence, explicit retention gaps, fixture replay tagged `fixture-replay` — local Postgres only, no testnet |
 | `pin-urls-reachable` *(online tier)* | the pinned upstream URLs resolve with identical bytes — nightly, never a merge gate |
 
 The PR gate is **offline and deterministic**: no workflow in the PR-gate path
@@ -86,8 +111,12 @@ not yet been exercised by this repo's decode milestone (I3) — see limitations.
 
 - **No ingestion yet.** `raw_events`, cursors, gap detection and fixture replay
   land in I2. This repo has not yet indexed a single ledger.
-- **No GraphQL endpoint yet** (I4), **no reconciliation** (I5), **no deployed
-  instance or soak run** (I6), **no clean-clone prove script** (I7).
+- **No decode, no API.** Raw events are stored but nothing interprets them
+  yet (I3), and no GraphQL endpoint exists (I4). **No reconciliation** (I5),
+  **no deployed instance or soak run** (I6), **no clean-clone prove script**
+  (I7).
+- **`/health` does not exist yet.** `ingest_gaps` rows are written and queryable
+  (tested), but the health surface that fails on open gaps arrives in I5.
 - **The parser WASM asset is pinned and hash-verified but unused.** Decode
   (I3) has not run against it from this repo; nothing here decodes anything yet.
 - **No live evidence from this repo.** Fixture provenance from the parser repo
