@@ -10,13 +10,15 @@ Part of the Stellar-Governance-Guardians suite:
 **[indexer](https://github.com/Stellar-Governance-Guardians/governance-event-indexer)** →
 [dashboard](https://github.com/Stellar-Governance-Guardians/delegate-portal-dashboard).
 
-## Status: I0 scaffold — not yet an indexer
+## Status: I0 scaffold + I1 pins — not yet an indexer
 
-This repository currently contains the **baseline milestone (I0)**: toolchain,
-database migrations, CI gate, and repo hygiene. The ingestion, decode, GraphQL,
-reconciliation and deployment milestones (I1–I7) are not built yet. Nothing in
-this repository has been verified against live testnet *by this repository's own
-evidence* yet; the statements below say exactly what has been checked and how.
+This repository currently contains the **baseline milestone (I0)** and the
+**pins milestone (I1)**: toolchain, database migrations, CI gate, repo hygiene,
+and vendored, hash-locked artifacts from the parser repo. The ingestion,
+decode, GraphQL, reconciliation and deployment milestones (I2–I7) are not built
+yet. Nothing in this repository has been verified against live testnet *by this
+repository's own evidence* yet; the statements below say exactly what has been
+checked and how.
 
 ## What it will do (planned, I1–I7)
 
@@ -37,7 +39,7 @@ evidence* yet; the statements below say exactly what has been checked and how.
 - **Deploy** via Docker image + compose for a small VPS or hosted Postgres
   (the 72h soak run must not live in a sleeping Codespace).
 
-## What I0 provides (proven — machine-checked)
+## What I0 + I1 provide (proven — machine-checked)
 
 Every claim in this section is an entry in [claims.json](claims.json), checked
 by `scripts/check-claims.sh` in CI (offline tier; skips print as SKIP, never
@@ -56,10 +58,29 @@ PASS):
 | `license-mit` | LICENSE is the MIT license (copyright 2026 Stellar-Governance-Guardians) |
 | `gitleaks-pinned` | gitleaks 8.30.1 pinned in the devcontainer and the CI gate |
 | `pr-gate-offline` | the PR-gate workflow never references a testnet RPC endpoint |
+| `pins-match` | every vendored artifact hash-matches its pin (`schema.lock` / `registry.lock` / `parser.lock`), offline |
+| `pin-urls-reachable` *(online tier)* | the pinned upstream URLs resolve with identical bytes — nightly, never a merge gate |
 
 The PR gate is **offline and deterministic**: no workflow in the PR-gate path
 talks to the testnet. Live-testnet checks belong to a nightly/manual workflow
 and never block merges.
+
+## Pinned artifacts (interface contract)
+
+This repo consumes the parser repo **only through pinned artifacts**. Three
+locks, all verified offline in every PR by `node scripts/check-pins.mjs`, plus
+a nightly reachability check (`.github/workflows/nightly-pins.yml`) that fails
+on an unreachable pin or upstream drift:
+
+| pin | pins | vendored at |
+|---|---|---|
+| [`schema.lock`](schema.lock) | `schemas/governance-v1.graphql` @ parser commit `ba3bf1a3ee7525215f3d3e919974f8b7fbaf0b74` (sha256 `cfbd85a8…`) | `schema/governance-v1.graphql` |
+| [`registry.lock`](registry.lock) | `deployments.json` @ the same parser commit (sha256 `b8c71c34…`) | `deployments.json` |
+| [`parser.lock`](parser.lock) | WASM release asset `sgg-parser-wasm-0.1.0-alpha.1.tgz` (sha256 `7b2eb942…`, matching the parser's release notes) | `vendor/sgg-parser-wasm-0.1.0-alpha.1.tgz` |
+
+Locks are bumped only by a PR that shows the diff and re-runs the checks. The
+vendored WASM is the parser's published **v0.1.0-alpha.1** pre-release; it has
+not yet been exercised by this repo's decode milestone (I3) — see limitations.
 
 ## Not proven / Honest limitations
 
@@ -67,9 +88,12 @@ and never block merges.
   land in I2. This repo has not yet indexed a single ledger.
 - **No GraphQL endpoint yet** (I4), **no reconciliation** (I5), **no deployed
   instance or soak run** (I6), **no clean-clone prove script** (I7).
+- **The parser WASM asset is pinned and hash-verified but unused.** Decode
+  (I3) has not run against it from this repo; nothing here decodes anything yet.
 - **No live evidence from this repo.** Fixture provenance from the parser repo
   will be pinned and cited, but this repo's own live-verification claims start
-  at I7 (`scripts/prove-indexer`).
+  at I7 (`scripts/prove-indexer`). Pin reachability is checked nightly (online
+  claims tier), not per-PR, because the PR gate must stay offline.
 - **Integration tests need Postgres** (docker compose or the CI service
   container); `npm test` fails loud without `DATABASE_URL` instead of skipping.
 - The testnet is periodically reset; pinned artifacts can become unreachable —
