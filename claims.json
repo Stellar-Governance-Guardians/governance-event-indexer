@@ -108,6 +108,42 @@
       "check": {
         "cmd": "grep -q 'name: charter rules' .github/workflows/ci.yml && grep -q 'name: typecheck / lint / unit / integration / build' .github/workflows/ci.yml"
       }
+    },
+    {
+      "id": "pins-match",
+      "claim": "every vendored artifact (SDL, deployment registry, parser WASM asset) hash-matches its pin file (schema.lock / registry.lock / parser.lock), offline",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "node scripts/check-pins.mjs"
+      }
+    },
+    {
+      "id": "pin-commit-sha",
+      "claim": "the parser commit SHA shown in README's pin table is the SHA recorded in schema.lock and registry.lock (README must be updated in the same PR that bumps a pin)",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "grep -q ba3bf1a3ee7525215f3d3e919974f8b7fbaf0b74 schema.lock && grep -q ba3bf1a3ee7525215f3d3e919974f8b7fbaf0b74 registry.lock && grep -q ba3bf1a3ee7525215f3d3e919974f8b7fbaf0b74 README.md"
+      }
+    },
+    {
+      "id": "nightly-pins-workflow",
+      "claim": "a nightly/manual workflow runs the online pin check (--online) and is not part of the PR gate",
+      "statedIn": ["README.md"],
+      "online": false,
+      "check": {
+        "cmd": "grep -q 'check-pins.mjs --online' .github/workflows/nightly-pins.yml && ! grep -q 'pull_request' .github/workflows/nightly-pins.yml"
+      }
+    },
+    {
+      "id": "pin-urls-reachable",
+      "claim": "the pinned upstream parser URLs (raw SDL, raw registry, WASM release asset) resolve and hash-match the locks byte-for-byte",
+      "statedIn": ["README.md"],
+      "online": true,
+      "check": {
+        "cmd": "node scripts/check-pins.mjs --online"
+      }
     }
   ]
 }
