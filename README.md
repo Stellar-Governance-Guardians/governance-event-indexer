@@ -1,14 +1,33 @@
 # governance-event-indexer
 
 Indexes Soroban governance events from the public Stellar testnet RPC into
-Postgres — raw first, decoded second — and serves them through a read-only
-GraphQL API that implements the pinned `governance-v1` schema. Fail-closed,
-governor-agnostic, zero mock data in production paths.
+Postgres — raw events land before anything is decoded — and is planned to serve
+them over a read-only GraphQL API that implements the pinned `governance-v1`
+schema. Fail-closed, governor-agnostic, zero mock data in production paths.
 
 Part of the Stellar-Governance-Guardians suite:
 [parser](https://github.com/Stellar-Governance-Guardians/soroban-governance-parser) →
 **[indexer](https://github.com/Stellar-Governance-Guardians/governance-event-indexer)** →
 [dashboard](https://github.com/Stellar-Governance-Guardians/delegate-portal-dashboard).
+
+**Documentation site:**
+<https://stellar-governance-guardians.github.io/soroban-governance-parser/> —
+architecture, quickstarts, the pinned API reference and the aggregated
+limitations for all three repositories.
+
+**Who it's for:** dashboard and delegate-tooling builders who need raw
+governance events stored durably and queried without trusting a UI.
+
+**Proven (offline, machine-checked):** windowed ingestion in ≤1000-ledger
+ranges, idempotent keyed storage, restart-safe cursor commits, explicit
+retention-gap rows and fixture replay through the same normalization path —
+48 unit and 11 integration tests, three vendored pins hash-verified offline.
+Evidence is in [claims.json](claims.json) and the
+[ingestion section](#ingestion-i2-built) below.
+
+**Not built:** decode (I3), the GraphQL API (I4), reconciliation (I5), the
+deploy recipe (I6) and the clean-clone prove script (I7). See "Not proven /
+Honest limitations".
 
 ## Status: I0 scaffold + I1 pins + I2 ingestion — not yet an API
 
@@ -109,8 +128,9 @@ not yet been exercised by this repo's decode milestone (I3) — see limitations.
 
 ## Not proven / Honest limitations
 
-- **No ingestion yet.** `raw_events`, cursors, gap detection and fixture replay
-  land in I2. This repo has not yet indexed a single ledger.
+- **Ingestion is built but has not run against a deployed instance.**
+  `raw_events`, cursors, gap detection and fixture replay are implemented and
+  integration-tested locally; no live deployment has indexed a ledger yet.
 - **No decode, no API.** Raw events are stored but nothing interprets them
   yet (I3), and no GraphQL endpoint exists (I4). **No reconciliation** (I5),
   **no deployed instance or soak run** (I6), **no clean-clone prove script**
