@@ -2,8 +2,9 @@
   "name": "governance-event-indexer",
   "version": "0.1.0",
   "private": true,
-  "description": "Soroban governance event indexer: raw-event ingestion from public RPC, parser-backed decoding, and a read-only GraphQL API implementing governance-v1.",
+  "description": "Soroban governance event indexer: raw-event ingestion from the public Stellar RPC into Postgres, with parser-backed decoding and a read-only governance-v1 GraphQL API planned.",
   "license": "MIT",
+  "homepage": "https://stellar-governance-guardians.github.io/soroban-governance-parser/",
   "repository": {
     "type": "git",
     "url": "https://github.com/Stellar-Governance-Guardians/governance-event-indexer.git"
