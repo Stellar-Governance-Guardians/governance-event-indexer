@@ -8,9 +8,10 @@ Use [GitHub Issues](https://github.com/Stellar-Governance-Guardians/governance-e
 for project discussion, bug reports, and contribution requests.
 
 Indexes Soroban governance events from the public Stellar testnet RPC into
-Postgres. Raw events land before anything is decoded, and a read-only GraphQL
-surface exposes the pinned `governance-v1` schema and indexer health. Fail-closed,
-governor-agnostic, zero mock data in production paths.
+Postgres. Raw events land first, then pinned parser WASM produces a durable,
+replayable decode record. The read-only GraphQL surface exposes that stored
+result through the pinned `governance-v1` schema and reports indexer health.
+Fail-closed, governor-agnostic, zero mock data in production paths.
 
 Part of the Stellar-Governance-Guardians suite:
 [parser](https://github.com/Stellar-Governance-Guardians/soroban-governance-parser) →
@@ -27,32 +28,35 @@ governance events stored durably and queried without trusting a UI.
 
 **Proven (offline, machine-checked):** windowed ingestion in ≤1000-ledger
 ranges, idempotent keyed storage, restart-safe cursor commits, explicit
-retention-gap rows, fixture replay through the same normalization path, and the
-read-only GraphQL health surface — 48 unit and 11 integration tests, three
-vendored pins hash-verified offline.
+retention-gap rows, fixture replay through the same raw-plus-decode path, and
+durable parser-backed event normalization with explicit unverified fallback —
+48 unit and 11 integration tests, three vendored pins hash-verified offline.
 Evidence is in [claims.json](claims.json) and the
 [ingestion section](#ingestion-i2-built) below.
 
-**Not built:** decode (I3), the GraphQL API (I4), reconciliation (I5), the
-deploy recipe (I6) and the clean-clone prove script (I7). See "Not proven /
-Honest limitations".
+**Not built:** proposal/action projections, reconciliation (I5), the deploy
+recipe (I6) and the clean-clone prove script (I7). See "Not proven / Honest
+limitations".
 
-## Status: I0 scaffold + I1 pins + I2 ingestion + I4 GraphQL health surface
+## Status: I0 scaffold + I1 pins + I2 ingestion + I3 durable normalization + I4 GraphQL surface
 
 This repository contains the **baseline (I0)**, **pins (I1)** and **ingestion
 (I2)** milestones, plus the first **GraphQL (I4)** surface: toolchain, database
 migrations, CI gate, repo hygiene, vendored hash-locked artifacts from the
 parser repo, raw event ingestion with cursors, gap detection, fixture replay,
-and an `/health` plus `/graphql` server. Full decode (I3), reconciliation (I5),
-deployment (I6) and the prove script (I7) remain incomplete. This repo's claims
-are exactly what the checks below verify — nothing more.
+and an `/health` plus `/graphql` server. The GraphQL event connection reads
+durable normalization records from `decoded_events` and preserves raw provenance
+when an event cannot be verified. Persisted decoded proposal tables,
+reconciliation (I5), deployment (I6) and the prove script (I7) remain
+incomplete. This repo's claims are exactly what the checks below verify —
+nothing more.
 
 ## What it will do next (planned, I3–I7)
 
 - **Decode** raw events through the pinned `soroban-governance-parser` WASM
-  package (Script3 adapter) into proposals, actions, risk flags, votes, power
-  checkpoints, delegations and delegates. Decode failures are stored and
-  replayable, never dropped.
+  package (Script3 adapter) into normalized events first, then into proposals,
+  actions, risk flags, votes, power checkpoints, delegations and delegates.
+  Decode failures remain visible and replayable, never silently dropped.
 - **Serve** the vendored `governance-v1` GraphQL schema (Yoga) with the current
   `indexerHealth` surface. Full decoded entities, depth and complexity limits,
   and delegate metrics remain planned work.
@@ -82,9 +86,14 @@ are exactly what the checks below verify — nothing more.
   cursor advances past it in the same transaction — loud, never a silent skip.
   `/health` and GraphQL `indexerHealth` report the resulting gap state.
 - **Fixture replay**: `node dist/cli.js replay <dir>` replays committed raw
-  `getEvents` responses through the **same normalization path**, tagging rows
+  `getEvents` responses through the **same raw-plus-decode path**, tagging rows
   `source='fixture-replay'`; live rows are `source='live'`. Replay never
   touches cursors, and a row's source is never flipped by a later write.
+
+- **Decode records**: every stored raw event gets a keyed `decoded_events` row
+  with parser version, normalized topics/payload, and `VERIFIED` or
+  `UNVERIFIED` status. Reprocessing is idempotent and can upgrade a record
+  after a parser pin is intentionally changed.
 
 ## What I0 + I1 + I2 provide (proven — machine-checked)
 
@@ -138,16 +147,17 @@ hash-verified here but full decode integration remains planned — see limitatio
 - **Ingestion is built but has not run against a deployed instance.**
   `raw_events`, cursors, gap detection and fixture replay are implemented and
   integration-tested locally; no live deployment has indexed a ledger yet.
-- **No decode, limited API.** Raw events are stored but nothing interprets them
-  yet (I3). The current GraphQL surface is limited to the pinned schema's
-  health query; decoded entities and governance queries remain part of I4.
+- **No decoded proposal/action tables yet.** Normalized event records are now
+  persisted and served by GraphQL. Proposal, execution-impact, and delegate
+  queries remain planned work.
   There is **no reconciliation** (I5), **no deployed instance or soak run**
   (I6), and **no clean-clone prove script** (I7).
 - **The health surface is intentionally narrow.** `/health` and GraphQL
   `indexerHealth` report RPC freshness, cursor lag, and open gaps. Full
   reconciliation drift checks arrive with I5.
-- **The parser WASM asset is pinned and hash-verified but full decode is not
-  wired into ingestion.** The I3 decode milestone remains incomplete.
+- **The parser WASM asset is pinned and hash-verified.** Event-level I3 decode
+  is wired into ingestion and replay; proposal/action projections remain out
+  of scope until their contract-specific schemas are pinned.
 - **No live evidence from this repo.** Fixture provenance from the parser repo
   will be pinned and cited, but this repo's own live-verification claims start
   at I7 (`scripts/prove-indexer`). Pin reachability is checked nightly (online

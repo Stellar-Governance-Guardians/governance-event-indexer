@@ -291,6 +291,16 @@ describe('fixture replay', () => {
         '34dd7cef8df6234f381563fff88b27a1163557f344f39832ff0e9901711215e3',
       );
 
+      const decoded = await db
+        .selectFrom('decoded_events')
+        .selectAll()
+        .orderBy('ledger')
+        .execute();
+      expect(decoded).toHaveLength(2);
+      expect(decoded.every((row) => row.parser_version === '0.1.0-alpha.2')).toBe(true);
+      expect(decoded.every((row) => row.decoding === 'UNVERIFIED')).toBe(true);
+      expect(decoded[0]!.payload).toMatchObject({ source: 'fixture-replay' });
+
       // replay never touches live cursors
       expect(await getCursor(db, FIXTURE_GOV)).toBeUndefined();
       const counts = await countRawEventsBySource(db);
@@ -304,6 +314,8 @@ describe('fixture replay', () => {
       );
       expect(again.inserted).toBe(0);
       expect(await countRawEventsBySource(db)).toEqual({ live: 0, fixtureReplay: 2 });
+      const decodedAgain = await db.selectFrom('decoded_events').selectAll().execute();
+      expect(decodedAgain).toHaveLength(2);
     });
   });
 

@@ -47,6 +47,23 @@ function jsonTopics(value: unknown): string[] {
   return value;
 }
 
+function missingDecodedEvent(row: {
+  contract_id: string;
+  ledger: number;
+  tx_hash: string;
+  topics: unknown;
+  value: string;
+  source: string;
+}) {
+  const topics = jsonTopics(row.topics);
+  return {
+    governor: 'unverified', topics, ledger: row.ledger, txHash: row.tx_hash,
+    contractId: row.contract_id,
+    payload: { rawTopics: topics, rawValue: row.value, source: row.source, reason: 'decode record missing' },
+    decoding: 'UNVERIFIED' as const,
+  };
+}
+
 export function buildGraphqlSchema(typeDefs: string): GraphQLSchema {
   return createSchema<GraphqlContext>({
     typeDefs,
@@ -69,25 +86,29 @@ export function buildGraphqlSchema(typeDefs: string): GraphQLSchema {
             throw new GraphQLError('first must be an integer between 1 and 100');
           }
           const offset = parseCursor(args.after);
-          let query = context.db.selectFrom('raw_events').selectAll().orderBy('ledger').orderBy('tx_hash').orderBy('op_index').orderBy('event_index').limit(first + 1).offset(offset);
-          if (args.contractId !== null && args.contractId !== undefined) query = query.where('contract_id', '=', args.contractId);
-          if (args.fromLedger !== null && args.fromLedger !== undefined) query = query.where('ledger', '>=', args.fromLedger);
-          if (args.toLedger !== null && args.toLedger !== undefined) query = query.where('ledger', '<=', args.toLedger);
+          let query = context.db.selectFrom('raw_events').leftJoin('decoded_events', (join) => join
+            .onRef('decoded_events.ledger', '=', 'raw_events.ledger')
+            .onRef('decoded_events.tx_hash', '=', 'raw_events.tx_hash')
+            .onRef('decoded_events.op_index', '=', 'raw_events.op_index')
+            .onRef('decoded_events.event_index', '=', 'raw_events.event_index'))
+            .selectAll('raw_events').select([
+              'decoded_events.governor as decoded_governor', 'decoded_events.topics as decoded_topics',
+              'decoded_events.payload as decoded_payload', 'decoded_events.decoding',
+            ]).orderBy('raw_events.ledger').orderBy('raw_events.tx_hash').orderBy('raw_events.op_index').orderBy('raw_events.event_index').limit(first + 1).offset(offset);
+          if (args.contractId !== null && args.contractId !== undefined) query = query.where('raw_events.contract_id', '=', args.contractId);
+          if (args.fromLedger !== null && args.fromLedger !== undefined) query = query.where('raw_events.ledger', '>=', args.fromLedger);
+          if (args.toLedger !== null && args.toLedger !== undefined) query = query.where('raw_events.ledger', '<=', args.toLedger);
           const rows = await query.execute();
           const hasNextPage = rows.length > first;
           const page = rows.slice(0, first);
           return {
             edges: page.map((row, index) => ({
               cursor: cursorFor(offset + index + 1),
-              node: {
-                governor: 'unverified',
-                topics: jsonTopics(row.topics),
-                ledger: row.ledger,
-                txHash: row.tx_hash,
-                contractId: row.contract_id,
-                payload: { rawTopics: jsonTopics(row.topics), rawValue: row.value, source: row.source },
-                decoding: 'UNVERIFIED',
-              },
+              node: row.decoded_governor === null || row.decoded_governor === undefined
+                ? missingDecodedEvent(row)
+                : { governor: row.decoded_governor, topics: jsonTopics(row.decoded_topics), ledger: row.ledger,
+                    txHash: row.tx_hash, contractId: row.contract_id, payload: row.decoded_payload,
+                    decoding: row.decoding },
             })),
             pageInfo: {
               hasNextPage,
