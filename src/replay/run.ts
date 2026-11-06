@@ -17,8 +17,8 @@ import type { Kysely } from 'kysely';
 import type { Database } from '../db/index.js';
 import type { GovernorRegistry } from '../registry/index.js';
 import { parseGetEventsResult } from '../rpc/client.js';
-import { toRawEventRow } from '../ingest/normalize.js';
-import { insertRawEvents } from '../ingest/store.js';
+import { toRawEventRow, type RawEventRow } from '../ingest/normalize.js';
+import { insertRawEvents, persistDecodedEvents } from '../ingest/store.js';
 
 export class ReplayError extends Error {
   override readonly name = 'ReplayError';
@@ -72,7 +72,7 @@ export async function replayFixtureFile(
   const registered = new Set(registry.entries.map((e) => e.contractId));
 
   const skipped = new Set<string>();
-  const rows = [];
+  const rows: RawEventRow[] = [];
   for (const event of parsed.events) {
     if (!registered.has(event.contractId)) {
       if (options.allowUnregistered !== true) {
@@ -88,7 +88,11 @@ export async function replayFixtureFile(
     rows.push(toRawEventRow(event, 'fixture-replay'));
   }
 
-  const inserted = await insertRawEvents(db, rows);
+  const inserted = await db.transaction().execute(async (trx) => {
+    const count = await insertRawEvents(trx, rows);
+    await persistDecodedEvents(trx, rows);
+    return count;
+  });
   return {
     file: filePath,
     events: parsed.events.length,

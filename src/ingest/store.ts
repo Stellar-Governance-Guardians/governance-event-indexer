@@ -7,6 +7,7 @@
 import { sql, type Kysely, type Transaction } from 'kysely';
 import type { Database, EventSource } from '../db/index.js';
 import type { RawEventRow } from './normalize.js';
+import { decodeStoredEvent } from '../parser/wasm.js';
 
 export type Db = Kysely<Database> | Transaction<Database>;
 
@@ -38,6 +39,44 @@ export async function insertRawEvents(db: Db, rows: readonly RawEventRow[]): Pro
     .onConflict((oc) => oc.columns([...RAW_EVENT_KEY]).doNothing())
     .executeTakeFirst();
   return Number(result?.numInsertedOrUpdatedRows ?? 0);
+}
+
+export async function persistDecodedEvents(db: Db, rows: readonly RawEventRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  const unique = new Map<string, RawEventRow>();
+  for (const row of rows) unique.set(`${row.ledger}|${row.tx_hash}|${row.op_index}|${row.event_index}`, row);
+  await db
+    .insertInto('decoded_events')
+    .values([...unique.values()].map((row) => {
+      const decoded = decodeStoredEvent({
+        contractId: row.contract_id,
+        ledger: row.ledger,
+        txHash: row.tx_hash,
+        topics: row.topics,
+        value: row.value,
+        source: row.source,
+      });
+      return {
+        ledger: row.ledger,
+        tx_hash: row.tx_hash,
+        op_index: row.op_index,
+        event_index: row.event_index,
+        parser_version: decoded.parserVersion,
+        governor: decoded.governor,
+        topics: JSON.stringify(decoded.topics),
+        payload: JSON.stringify(decoded.payload),
+        decoding: decoded.decoding,
+      };
+    }))
+    .onConflict((oc) => oc.columns([...RAW_EVENT_KEY]).doUpdateSet({
+      parser_version: sql`excluded.parser_version`,
+      governor: sql`excluded.governor`,
+      topics: sql`excluded.topics`,
+      payload: sql`excluded.payload`,
+      decoding: sql`excluded.decoding`,
+      decoded_at: sql`now()`,
+    }))
+    .execute();
 }
 
 export async function getCursor(db: Db, contractId: string): Promise<number | undefined> {
@@ -116,9 +155,12 @@ export async function commitWindow(
   db: Db,
   args: { contractId: string; windowEnd: number; rows: readonly RawEventRow[] },
 ): Promise<number> {
-  const inserted = await insertRawEvents(db, args.rows);
-  await advanceCursor(db, args.contractId, args.windowEnd);
-  return inserted;
+  return db.transaction().execute(async (trx) => {
+    const inserted = await insertRawEvents(trx, args.rows);
+    await persistDecodedEvents(trx, args.rows);
+    await advanceCursor(trx, args.contractId, args.windowEnd);
+    return inserted;
+  });
 }
 
 export interface SourceCounts {

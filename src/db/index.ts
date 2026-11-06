@@ -41,6 +41,21 @@ export interface RawEventsTable {
   ingested_at: ColumnType<Date, string | Date | undefined, never>;
 }
 
+export type DecodingStatus = 'VERIFIED' | 'UNVERIFIED';
+
+export interface DecodedEventsTable {
+  ledger: number;
+  tx_hash: string;
+  op_index: number;
+  event_index: number;
+  parser_version: string;
+  governor: string;
+  topics: ColumnType<unknown, string, string>;
+  payload: ColumnType<unknown, string, string>;
+  decoding: DecodingStatus;
+  decoded_at: ColumnType<Date, string | Date | undefined, string | Date>;
+}
+
 export interface IngestCursorsTable {
   contract_id: string;
   last_ledger: number;
@@ -61,6 +76,7 @@ export interface IngestGapsTable {
 export interface Database {
   indexer_meta: IndexerMetaTable;
   raw_events: RawEventsTable;
+  decoded_events: DecodedEventsTable;
   ingest_cursors: IngestCursorsTable;
   ingest_gaps: IngestGapsTable;
 }
