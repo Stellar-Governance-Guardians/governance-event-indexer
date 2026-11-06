@@ -1,9 +1,16 @@
-# governance-event-indexer
+# Governance Event Indexer
+
+[![CI](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/actions/workflows/ci.yml/badge.svg)](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+Maintained by [Stellar Governance Guardians](https://github.com/Stellar-Governance-Guardians).
+Use [GitHub Issues](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/issues)
+for project discussion, bug reports, and contribution requests.
 
 Indexes Soroban governance events from the public Stellar testnet RPC into
-Postgres — raw events land before anything is decoded — and is planned to serve
-them over a read-only GraphQL API that implements the pinned `governance-v1`
-schema. Fail-closed, governor-agnostic, zero mock data in production paths.
+Postgres. Raw events land before anything is decoded, and a read-only GraphQL
+surface exposes the pinned `governance-v1` schema and indexer health. Fail-closed,
+governor-agnostic, zero mock data in production paths.
 
 Part of the Stellar-Governance-Guardians suite:
 [parser](https://github.com/Stellar-Governance-Guardians/soroban-governance-parser) →
@@ -20,8 +27,9 @@ governance events stored durably and queried without trusting a UI.
 
 **Proven (offline, machine-checked):** windowed ingestion in ≤1000-ledger
 ranges, idempotent keyed storage, restart-safe cursor commits, explicit
-retention-gap rows and fixture replay through the same normalization path —
-48 unit and 11 integration tests, three vendored pins hash-verified offline.
+retention-gap rows, fixture replay through the same normalization path, and the
+read-only GraphQL health surface — 48 unit and 11 integration tests, three
+vendored pins hash-verified offline.
 Evidence is in [claims.json](claims.json) and the
 [ingestion section](#ingestion-i2-built) below.
 
@@ -29,15 +37,15 @@ Evidence is in [claims.json](claims.json) and the
 deploy recipe (I6) and the clean-clone prove script (I7). See "Not proven /
 Honest limitations".
 
-## Status: I0 scaffold + I1 pins + I2 ingestion — not yet an API
+## Status: I0 scaffold + I1 pins + I2 ingestion + I4 GraphQL health surface
 
-This repository currently contains the **baseline (I0)**, **pins (I1)** and
-**ingestion (I2)** milestones: toolchain, database migrations, CI gate, repo
-hygiene, vendored hash-locked artifacts from the parser repo, and live-raw
-event ingestion with cursors, gap detection and fixture replay. Decode (I3),
-the GraphQL API (I4), reconciliation (I5), deployment (I6) and the prove
-script (I7) are not built yet. This repo's own claims are exactly what the
-checks below verify — nothing more.
+This repository contains the **baseline (I0)**, **pins (I1)** and **ingestion
+(I2)** milestones, plus the first **GraphQL (I4)** surface: toolchain, database
+migrations, CI gate, repo hygiene, vendored hash-locked artifacts from the
+parser repo, raw event ingestion with cursors, gap detection, fixture replay,
+and an `/health` plus `/graphql` server. Full decode (I3), reconciliation (I5),
+deployment (I6) and the prove script (I7) remain incomplete. This repo's claims
+are exactly what the checks below verify — nothing more.
 
 ## What it will do next (planned, I3–I7)
 
@@ -45,10 +53,9 @@ checks below verify — nothing more.
   package (Script3 adapter) into proposals, actions, risk flags, votes, power
   checkpoints, delegations and delegates. Decode failures are stored and
   replayable, never dropped.
-- **Serve** the vendored `governance-v1` GraphQL schema (Yoga) with depth and
-  complexity limits, delegate metrics as raw counts plus published formulas
-  (SPEC.md lands with I4 — no opaque scores), and an `indexerStatus`-style
-  health surface that reports lag, open gaps and reconciliation drift.
+- **Serve** the vendored `governance-v1` GraphQL schema (Yoga) with the current
+  `indexerHealth` surface. Full decoded entities, depth and complexity limits,
+  and delegate metrics remain planned work.
 - **Reconcile** SQL tallies against on-chain reads and fail health checks on
   nonzero drift or excess lag.
 - **Deploy** via Docker image + compose for a small VPS or hosted Postgres
@@ -72,8 +79,8 @@ checks below verify — nothing more.
   cursor advance — a killed process re-fetches and converges.
 - **Retention gaps**: if a cursor is behind the RPC's oldest ledger, the
   unreadable range is written to `ingest_gaps` (reason `retention`) and the
-  cursor advances past it in the same transaction — loud, never a silent
-  skip. (`/health` surfacing lands with I5.)
+  cursor advances past it in the same transaction — loud, never a silent skip.
+  `/health` and GraphQL `indexerHealth` report the resulting gap state.
 - **Fixture replay**: `node dist/cli.js replay <dir>` replays committed raw
   `getEvents` responses through the **same normalization path**, tagging rows
   `source='fixture-replay'`; live rows are `source='live'`. Replay never
@@ -120,25 +127,27 @@ on an unreachable pin or upstream drift:
 |---|---|---|
 | [`schema.lock`](schema.lock) | `schemas/governance-v1.graphql` @ parser commit `ba3bf1a3ee7525215f3d3e919974f8b7fbaf0b74` (sha256 `cfbd85a8…`) | `schema/governance-v1.graphql` |
 | [`registry.lock`](registry.lock) | `deployments.json` @ the same parser commit (sha256 `b8c71c34…`) | `deployments.json` |
-| [`parser.lock`](parser.lock) | WASM release asset `sgg-parser-wasm-0.1.0-alpha.1.tgz` (sha256 `7b2eb942…`, matching the parser's release notes) | `vendor/sgg-parser-wasm-0.1.0-alpha.1.tgz` |
+| [`parser.lock`](parser.lock) | WASM release asset `sgg-parser-wasm-0.1.0-alpha.2.tgz` (sha256 `65193e43…`, matching the parser's release notes) | `vendor/sgg-parser-wasm-0.1.0-alpha.2.tgz` |
 
 Locks are bumped only by a PR that shows the diff and re-runs the checks. The
-vendored WASM is the parser's published **v0.1.0-alpha.1** pre-release; it has
-not yet been exercised by this repo's decode milestone (I3) — see limitations.
+vendored WASM is the parser's published **v0.1.0-alpha.2** pre-release; it is
+hash-verified here but full decode integration remains planned — see limitations.
 
 ## Not proven / Honest limitations
 
 - **Ingestion is built but has not run against a deployed instance.**
   `raw_events`, cursors, gap detection and fixture replay are implemented and
   integration-tested locally; no live deployment has indexed a ledger yet.
-- **No decode, no API.** Raw events are stored but nothing interprets them
-  yet (I3), and no GraphQL endpoint exists (I4). **No reconciliation** (I5),
-  **no deployed instance or soak run** (I6), **no clean-clone prove script**
-  (I7).
-- **`/health` does not exist yet.** `ingest_gaps` rows are written and queryable
-  (tested), but the health surface that fails on open gaps arrives in I5.
-- **The parser WASM asset is pinned and hash-verified but unused.** Decode
-  (I3) has not run against it from this repo; nothing here decodes anything yet.
+- **No decode, limited API.** Raw events are stored but nothing interprets them
+  yet (I3). The current GraphQL surface is limited to the pinned schema's
+  health query; decoded entities and governance queries remain part of I4.
+  There is **no reconciliation** (I5), **no deployed instance or soak run**
+  (I6), and **no clean-clone prove script** (I7).
+- **The health surface is intentionally narrow.** `/health` and GraphQL
+  `indexerHealth` report RPC freshness, cursor lag, and open gaps. Full
+  reconciliation drift checks arrive with I5.
+- **The parser WASM asset is pinned and hash-verified but full decode is not
+  wired into ingestion.** The I3 decode milestone remains incomplete.
 - **No live evidence from this repo.** Fixture provenance from the parser repo
   will be pinned and cited, but this repo's own live-verification claims start
   at I7 (`scripts/prove-indexer`). Pin reachability is checked nightly (online
@@ -199,6 +208,21 @@ README/SPEC claims are machine-checked (charter rule 7): each one is an entry in
 [scripts/check-claims.sh](scripts/check-claims.sh) in CI. Two tiers: the PR gate
 runs `OFFLINE=1` (deterministic, network-free); live-testnet claims run in the
 nightly/manual workflow only. Skips are reported as SKIP, never as PASS.
+
+## Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Run
+`npm run typecheck`, `npm run lint`, `npm run test:unit`, and `npm run check:pins`
+locally. Integration tests require the Postgres service described in Quick
+start. Report security issues through [SECURITY.md](SECURITY.md), not a public
+issue.
+
+## Community and contributors
+
+Project discussion happens in [GitHub Issues](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/issues)
+and pull requests.
+
+[![Contributors](https://contrib.rocks/image?repo=Stellar-Governance-Guardians/governance-event-indexer)](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/graphs/contributors)
 
 ## Security
 
