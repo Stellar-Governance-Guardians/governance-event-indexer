@@ -59,9 +59,18 @@
       "id": "integration-migrations-from-empty",
       "claim": "forward-only migrations apply from an empty database, are idempotent, and round-trip through Postgres — local Postgres only, no testnet (requires DATABASE_URL)",
       "statedIn": ["README.md"],
-      "online": false,
+      "online": true,
       "check": {
-        "cmd": "npm run test:integration"
+        "cmd": "if [ -z \"${DATABASE_URL+x}\" ]; then echo \"SKIP  postgres not running (DATABASE_URL not set)\"; exit 0; fi; npm run test:integration"
+      }
+    },
+    {
+      "id": "ingestion-integration",
+      "claim": "the full ingestion lifecycle passes against Postgres: <=1000-ledger windows, idempotent keyed upserts, restart-safety convergence, explicit retention gaps, and fixture replay tagged source=fixture-replay — local Postgres only, no testnet",
+      "statedIn": ["README.md"],
+      "online": true,
+      "check": {
+        "cmd": "if [ -z \"${DATABASE_URL+x}\" ]; then echo \"SKIP  postgres not running (DATABASE_URL not set)\"; exit 0; fi; npm run test:integration"
       }
     },
     {

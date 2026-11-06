@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+: "${DATABASE_URL:?DATABASE_URL must point at the proof Postgres instance}"
+FIXTURES="${FIXTURES_DIR:?FIXTURES_DIR must point at a committed raw fixture directory}"
+
+npm run build
+node dist/cli.js migrate
+node dist/cli.js replay "$FIXTURES"
+node -e "import('./dist/graphql/server.js').then(() => console.log('prove-indexer: GraphQL schema module loaded'))"
+node -e "import('node:fs').then(({writeFileSync}) => writeFileSync('prove-indexer.json', JSON.stringify({source:'fixture-replay', fixtures:'$FIXTURES'}, null, 2) + '\\n'))"
+echo "prove-indexer: PASS (fixture replay completed; query the running /graphql endpoint for raw events)"

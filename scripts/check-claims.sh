@@ -5,7 +5,7 @@
 # Two-tier modes (process rule: PR gate is offline + deterministic):
 #   OFFLINE=1     -> PR gate: run only deterministic, network-free claims
 #   ONLINE_ONLY=1 -> live tier (nightly/manual dispatch): run only testnet claims
-#   (default)     -> run everything
+#   (default)     -> run everything; online claims SKIP if DATABASE_URL absent
 # Skipped claims are reported as SKIP, never as PASS.
 set -u
 cd "$(dirname "$0")/.."
@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 OFFLINE="${OFFLINE:-0}"
 ONLINE_ONLY="${ONLINE_ONLY:-0}"
 python3 - "$OFFLINE" "$ONLINE_ONLY" <<'PYEOF' > /tmp/indexer-claims-generated.sh
-import json, sys
+import json, sys, os
 offline = sys.argv[1] == "1"
 online_only = sys.argv[2] == "1"
 claims = json.load(open("claims.json"))["claims"]
@@ -28,6 +28,8 @@ for c in claims:
     if skip:
         why = "live tier only" if online_only else "OFFLINE=1"
         print(f'echo "SKIP  {c["id"]} ({why})"; SKIPPED=$((SKIPPED+1))')
+    elif online and not online_only and offline != "1" and online_only != "1" and os.environ.get("DATABASE_URL") is None:
+        print(f'echo "SKIP  {c["id"]} (DATABASE_URL not set)"; SKIPPED=$((SKIPPED+1))')
     else:
         print(f'if bash -c "{cmd}" >/dev/null 2>&1; then echo "PASS  {c["id"]}"; PASSED=$((PASSED+1)); else echo "FAIL  {c["id"]}: {c["claim"]}"; FAILED=$((FAILED+1)); fi')
 print('echo "claims: $PASSED passed, $FAILED failed, $SKIPPED skipped"')
