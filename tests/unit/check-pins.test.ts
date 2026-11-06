@@ -28,7 +28,7 @@ describe('check-pins online (injected fetch)', () => {
             ? join(process.cwd(), 'schema/governance-v1.graphql')
             : url.includes('deployments.json')
               ? join(process.cwd(), 'deployments.json')
-              : join(process.cwd(), 'vendor/sgg-parser-wasm-0.1.0-alpha.1.tgz');
+              : join(process.cwd(), 'vendor', url.split('/').at(-1) ?? '');
         return new Response(readFileSync(local));
       },
     });
