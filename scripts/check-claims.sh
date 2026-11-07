@@ -10,6 +10,19 @@
 set -u
 cd "$(dirname "$0")/.."
 
+# A missing TOOL is a failure, never a skip (process rule: "A missing TOOL
+# (python3, node, cargo) is never a skip"). The Microsoft Store python3 stub
+# prints a message and exits non-zero, which used to make this script exit 0
+# without running a single claim.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "check-claims: FAIL: python3 is required but not on PATH (a missing tool is never a skip)" >&2
+  exit 1
+fi
+if ! python3 -c 'import json, sys' 2>/dev/null; then
+  echo "check-claims: FAIL: python3 could not run (Store alias stub?) — install real Python" >&2
+  exit 1
+fi
+
 OFFLINE="${OFFLINE:-0}"
 ONLINE_ONLY="${ONLINE_ONLY:-0}"
 python3 - "$OFFLINE" "$ONLINE_ONLY" <<'PYEOF' > /tmp/indexer-claims-generated.sh
