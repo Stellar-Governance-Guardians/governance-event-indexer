@@ -24,9 +24,12 @@
     "check:pins": "node scripts/check-pins.mjs",
     "premigrate": "npm run build",
     "migrate": "node dist/cli.js migrate",
-    "serve": "npm run build && node dist/server.js"
+    "serve": "npm run build && node dist/server.js",
+    "prove": "bash scripts/prove-indexer",
+    "check:docs": "node scripts/check-doc-references.mjs"
   },
   "dependencies": {
+    "@whatwg-node/server": "^0.10.18",
     "graphql": "^16.11.0",
     "graphql-yoga": "^5.17.1",
     "kysely": "^0.28.7",

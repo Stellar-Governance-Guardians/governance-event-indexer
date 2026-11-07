@@ -8,6 +8,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     networks: [internal]
 
   indexer:
@@ -17,8 +22,10 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       RPC_URL: ${RPC_URL:-https://soroban-testnet.stellar.org}
       PORT: 4000
+      HEALTH_CACHE_MS: ${HEALTH_CACHE_MS:-5000}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     networks: [internal, edge]
 
   caddy:
@@ -34,7 +41,8 @@ services:
       - caddy-data:/data
       - caddy-config:/config
     depends_on:
-      - indexer
+      indexer:
+        condition: service_started
     networks: [edge]
 
 volumes:
