@@ -1,0 +1,10 @@
+{
+  "$comment": "Independent expectations for scripts/prove-indexer, derived by hand from tests/fixtures/replay/phase1-fixture-events.json: two contract events (ledgers 5035906 and 5035908) emitted by SAC contract CDJWPKSQ4NA67PKTNJEPI6R2Q3JEDXPX5EDPM3YOSEHBDGBZ5THBTOKE. Neither carries the Script3 governor contract id or its topic shape, so a correct decoder must keep both UNVERIFIED and preserve the raw payload. A change in any number below is a decoding regression, not a fixture update.",
+  "events": 2,
+  "decoding": { "VERIFIED": 0, "UNVERIFIED": 2 },
+  "governors": { "unverified": 2 },
+  "ledgers": [5035906, 5035908],
+  "contractId": "CDJWPKSQ4NA67PKTNJEPI6R2Q3JEDXPX5EDPM3YOSEHBDGBZ5THBTOKE",
+  "source": "fixture-replay",
+  "unverifiedReason": "no pinned governor adapter matched this event"
+}

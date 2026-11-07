@@ -108,9 +108,63 @@ jobs:
         run: npm run test:unit
       - name: integration tests (local Postgres only)
         run: npm run test:integration
+      # Charter/evidence rule 7: no doc may cite a script, workflow or npm
+      # script that does not exist. Offline and deterministic.
+      - name: no phantom references in docs
+        run: node scripts/check-doc-references.mjs
       # Charter rule 7: claims ledger — machine-checked README/SPEC claims.
       # PR gate tier: offline/deterministic claims only, skips reported as SKIP.
+      # A missing tool (python3) fails; only an absent SERVICE is skipped.
       # Runs after the explicit steps above so failures are attributed once,
       # with full context (deps + Postgres) available to every claim command.
       - name: claims ledger (offline tier)
         run: OFFLINE=1 bash scripts/check-claims.sh
+
+  container:
+    name: runtime image decodes with the pinned parser
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: indexer
+          POSTGRES_PASSWORD: indexer-local-only
+          POSTGRES_DB: indexer
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U indexer -d indexer"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      DATABASE_URL: postgres://indexer:indexer-local-only@localhost:5432/indexer
+    steps:
+      - uses: actions/checkout@v4
+      - name: build the production image
+        run: docker build -t governance-indexer:ci .
+      # The regression this guards: the runtime stage used to omit
+      # generated/parser, so every decode fell back to UNVERIFIED with a
+      # missing-module reason. Assert the artifact exists in the image.
+      - name: parser artifact is in the runtime image
+        run: |
+          docker run --rm --entrypoint node governance-indexer:ci -e "\
+            require('node:fs').accessSync('generated/parser/nodejs/sgp_parser_wasm.js'); \
+            console.log('parser artifact present')"
+      - name: migrate and replay fixtures inside the image
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            --entrypoint node governance-indexer:ci dist/cli.js migrate
+          docker run --rm --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -v "$PWD/tests/fixtures/replay:/fixtures:ro" \
+            --entrypoint node governance-indexer:ci \
+            dist/cli.js replay /fixtures --allow-unregistered
+      - name: assert decoded rows exist at the pinned parser version
+        run: |
+          docker run --rm --network host \
+            -e DATABASE_URL="$DATABASE_URL" \
+            -v "$PWD/scripts:/app/scripts:ro" \
+            -v "$PWD/parser.lock:/app/parser.lock:ro" \
+            governance-indexer:ci node scripts/check-container-decode.mjs

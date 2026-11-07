@@ -41,7 +41,14 @@ export default tseslint.config(
     // typescript-eslint override; no-undef does not apply there).
     files: ['**/*.mjs'],
     languageOptions: {
-      globals: { console: 'readonly', process: 'readonly', Buffer: 'readonly' },
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        Buffer: 'readonly',
+        // Node 24 provides these; the proof script queries /graphql with them.
+        fetch: 'readonly',
+        AbortSignal: 'readonly',
+      },
     },
   },
   {
