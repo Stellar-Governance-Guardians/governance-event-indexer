@@ -1,14 +1,13 @@
 # Wave issue drafts
 
 These drafts describe the remaining indexer work in dependency order. Open them
-as GitHub issues only after the repository is approved for the Stellar Wave and
-the current program label/complexity conventions are confirmed.
+as GitHub issues only after the repository is approved for the Stellar Wave.
 
-| Issue | Area | Complexity | Dependency |
-|---|---|---:|---|
-| Persist parser-backed normalization | decode | High | parser alpha.2 pin |
-| Reconciliation and health drift | reliability | High | decoded tables |
-| Production deployment and soak proof | operations | Medium | health drift |
+| Issue | Dependency |
+|---|---|
+| Persist parser-backed normalization | parser alpha.2 pin |
+| Reconciliation and health drift | decoded tables |
+| Production deployment and soak proof | health drift |
 
 Every issue must include tests, provenance, and an explicit limitation when a
 dependency is not available. No issue should ask a contributor to add fixture

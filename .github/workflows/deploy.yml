@@ -1,0 +1,73 @@
+name: deploy
+
+# Production deploy. Manual dispatch or a version tag only; never on push to
+# main, so a merge cannot deploy by accident. Credentials come from Actions
+# secrets on a protected environment — the workflow contains none.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit SHA or tag to deploy (defaults to the dispatched ref)
+        required: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy to the production host
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: required secrets are set
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          missing=0
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+            if [ -z "${!name}" ]; then echo "MISSING secret: $name"; missing=1; fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "Deploy needs DEPLOY_HOST, DEPLOY_USER and DEPLOY_SSH_KEY in the"
+            echo "production environment's Actions secrets. Nothing was deployed."
+            exit 1
+          fi
+
+      - name: deploy over SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/governance-event-indexer' }}
+          DEPLOY_REF: ${{ inputs.ref || github.sha }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -euo pipefail
+             cd '$DEPLOY_DIR'
+             git fetch --depth=1 origin '$DEPLOY_REF'
+             git checkout --detach FETCH_HEAD
+             docker compose -f docker-compose.prod.yml up -d --build
+             docker compose -f docker-compose.prod.yml exec -T indexer node dist/cli.js migrate
+             curl -fsS --retry 10 --retry-delay 3 http://127.0.0.1:4000/health > /dev/null || \
+               docker compose -f docker-compose.prod.yml exec -T indexer \
+                 node -e \"fetch('http://127.0.0.1:4000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"
+             echo deployed '$DEPLOY_REF'"

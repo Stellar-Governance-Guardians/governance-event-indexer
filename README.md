@@ -30,13 +30,14 @@ governance events stored durably and queried without trusting a UI.
 ranges, idempotent keyed storage, restart-safe cursor commits, explicit
 retention-gap rows, fixture replay through the same raw-plus-decode path, and
 durable parser-backed event normalization with explicit unverified fallback —
-48 unit and 11 integration tests, three vendored pins hash-verified offline.
+57 unit and 18 integration tests, three vendored pins hash-verified offline.
 Evidence is in [claims.json](claims.json) and the
 [ingestion section](#ingestion-i2-built) below.
 
-**Not built:** proposal/action projections, reconciliation (I5), the deploy
-recipe (I6) and the clean-clone prove script (I7). See "Not proven / Honest
-limitations".
+**Not built:** proposal/action projections and reconciliation (I5). The deploy
+recipe (I6, [docs/deploy.md](docs/deploy.md)) and the clean-clone prove script
+(I7, [`scripts/prove-indexer`](scripts/prove-indexer)) ship. See "Not proven /
+Honest limitations".
 
 ## Status: I0 scaffold + I1 pins + I2 ingestion + I3 durable normalization + I4 GraphQL surface
 
@@ -46,10 +47,9 @@ migrations, CI gate, repo hygiene, vendored hash-locked artifacts from the
 parser repo, raw event ingestion with cursors, gap detection, fixture replay,
 and an `/health` plus `/graphql` server. The GraphQL event connection reads
 durable normalization records from `decoded_events` and preserves raw provenance
-when an event cannot be verified. Persisted decoded proposal tables,
-reconciliation (I5), deployment (I6) and the prove script (I7) remain
-incomplete. This repo's claims are exactly what the checks below verify —
-nothing more.
+when an event cannot be verified. Persisted decoded proposal tables and
+reconciliation (I5) remain incomplete. This repo's claims are exactly what the
+checks below verify — nothing more.
 
 ## What it will do next (planned, I3–I7)
 
@@ -150,8 +150,9 @@ hash-verified here but full decode integration remains planned — see limitatio
 - **No decoded proposal/action tables yet.** Normalized event records are now
   persisted and served by GraphQL. Proposal, execution-impact, and delegate
   queries remain planned work.
-  There is **no reconciliation** (I5), **no deployed instance or soak run**
-  (I6), and **no clean-clone prove script** (I7).
+  There is **no reconciliation** (I5) and **no deployed instance or soak run**
+  (I6). The clean-clone prove script (I7) exists and asserts the replayed
+  fixture values against a running `/graphql`; run it with `npm run prove`.
 - **The health surface is intentionally narrow.** `/health` and GraphQL
   `indexerHealth` report RPC freshness, cursor lag, and open gaps. Full
   reconciliation drift checks arrive with I5.
@@ -159,9 +160,10 @@ hash-verified here but full decode integration remains planned — see limitatio
   is wired into ingestion and replay; proposal/action projections remain out
   of scope until their contract-specific schemas are pinned.
 - **No live evidence from this repo.** Fixture provenance from the parser repo
-  will be pinned and cited, but this repo's own live-verification claims start
-  at I7 (`scripts/prove-indexer`). Pin reachability is checked nightly (online
-  claims tier), not per-PR, because the PR gate must stay offline.
+  is pinned and cited; this repo has not ingested a live ledger yet. The
+  clean-clone proof (`scripts/prove-indexer`) runs against fixture replay only.
+  Pin reachability is checked nightly (online claims tier), not per-PR, because
+  the PR gate must stay offline.
 - **Integration tests need Postgres** (docker compose or the CI service
   container); `npm test` fails loud without `DATABASE_URL` instead of skipping.
 - The testnet is periodically reset; pinned artifacts can become unreachable —
@@ -196,7 +198,7 @@ there:
   keys, tokens. Never commit them; `.seed/` and `.env*` are gitignored.
 - **Run `gitleaks detect --redact` before every push.**
 - Codespaces **sleep when idle**: nothing that must stay up (the 72h soak run)
-  runs inside one — see the deploy recipe milestone (I6).
+  runs inside one — see the deploy recipe in [docs/deploy.md](docs/deploy.md).
 
 ## Development commands
 
@@ -209,6 +211,8 @@ there:
 | `npm test` | both test tiers (fails loud if Postgres is down) |
 | `npm run build` | compile `src/` → `dist/` |
 | `npm run migrate` | build + apply pending migrations to `$DATABASE_URL` |
+| `npm run prove` | clean-clone proof: replay fixtures, query `/graphql`, assert exact values |
+| `npm run check:docs` | fail if a doc cites a missing script, workflow or npm script |
 | `bash scripts/check-claims.sh` | run the claims ledger (offline tier: `OFFLINE=1`) |
 
 ## Claims ledger
