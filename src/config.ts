@@ -18,6 +18,11 @@ export interface Config {
   readonly governorRegistryOverride: string[];
   /** getEvents window size in ledgers. Hard-capped at MAX_WINDOW_LEDGERS. */
   readonly ingestWindowLedgers: number;
+  /**
+   * How long a successful RPC health read is reused. Bounded so a stale
+   * reading can never be served as fresh indefinitely.
+   */
+  readonly healthCacheMs: number;
 }
 
 /** Public SDF testnet RPC (deployments.json network entry, same endpoint). */
@@ -26,6 +31,8 @@ export const DEFAULT_PORT = 4000;
 /** Public RPC times out on wider ranges (parser SPEC ground truth). */
 export const MAX_WINDOW_LEDGERS = 1000;
 export const DEFAULT_WINDOW_LEDGERS = 1000;
+export const DEFAULT_HEALTH_CACHE_MS = 5_000;
+export const MAX_HEALTH_CACHE_MS = 60_000;
 
 export class ConfigError extends Error {
   override readonly name = 'ConfigError';
@@ -127,6 +134,22 @@ export function parseWindowLedgers(env: Env): number {
   return n;
 }
 
+export function parseHealthCacheMs(env: Env): number {
+  const raw = env['HEALTH_CACHE_MS'];
+  if (raw === undefined || raw === '') return DEFAULT_HEALTH_CACHE_MS;
+  if (!/^\d+$/.test(raw)) {
+    throw new ConfigError(`HEALTH_CACHE_MS must be a non-negative integer (got "${raw}").`);
+  }
+  const n = Number(raw);
+  if (n > MAX_HEALTH_CACHE_MS) {
+    throw new ConfigError(
+      `HEALTH_CACHE_MS must be at most ${MAX_HEALTH_CACHE_MS}; a longer window would report a stale ` +
+        'ledger position as healthy.',
+    );
+  }
+  return n;
+}
+
 export function loadConfig(env: Env = process.env): Config {
   return {
     databaseUrl: requireDatabaseUrl(env),
@@ -134,5 +157,6 @@ export function loadConfig(env: Env = process.env): Config {
     port: parsePort(env),
     governorRegistryOverride: parseRegistryOverride(env),
     ingestWindowLedgers: parseWindowLedgers(env),
+    healthCacheMs: parseHealthCacheMs(env),
   };
 }
