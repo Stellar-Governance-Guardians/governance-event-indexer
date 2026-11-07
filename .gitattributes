@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# Binary artifacts pinned by sha256: never normalize line endings.
+*.tgz binary
+*.wasm binary
