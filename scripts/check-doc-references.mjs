@@ -61,11 +61,14 @@ function checkPath(kind, target, file) {
 for (const file of files) {
   const text = readFileSync(file, 'utf8');
 
+  // A path inside an absolute URL is not a local reference.
+  const scan = text.replace(/https?:\/\/\S+/g, '');
+
   for (const { pattern, kind } of CANDIDATES) {
-    for (const match of text.matchAll(pattern)) checkPath(kind, match[0], file);
+    for (const match of scan.matchAll(pattern)) checkPath(kind, match[0], file);
   }
 
-  for (const match of text.matchAll(/npm run ([A-Za-z0-9:._-]+)/g)) {
+  for (const match of scan.matchAll(/npm run ([A-Za-z0-9:._-]+)/g)) {
     const name = trim(match[1]);
     checked.add(`npm:${name}`);
     if (scripts[name] === undefined) {
