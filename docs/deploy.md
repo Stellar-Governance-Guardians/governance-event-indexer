@@ -53,10 +53,13 @@ exact reason stays readable to the client. Do not replace this with a blanket
 ## The workflow
 
 `.github/workflows/deploy.yml` is manual-dispatch or tag-triggered, runs in the
-`production` environment, and reads `DEPLOY_HOST`, `DEPLOY_USER` and
-`DEPLOY_SSH_KEY` from that environment's Actions secrets. It fails with an
-explicit message naming the missing secret; it does not contain credentials and
-does not deploy on a push to `main`.
+`production` environment, and reads `DEPLOY_HOST`, `DEPLOY_USER`,
+`DEPLOY_SSH_KEY` and `DEPLOY_KNOWN_HOSTS` from that environment's Actions
+secrets. `DEPLOY_KNOWN_HOSTS` is a pinned `known_hosts` line for the host; the
+workflow never calls `ssh-keyscan`, so a deploy cannot be talked into trusting
+a different server. The key and host-key files are removed when the step exits.
+It fails with an explicit message naming the missing secret; it does not
+contain credentials and does not deploy on a push to `main`.
 
 ## Backups
 

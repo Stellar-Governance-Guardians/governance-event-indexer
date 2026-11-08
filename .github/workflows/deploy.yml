@@ -36,14 +36,16 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           missing=0
-          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
             if [ -z "${!name}" ]; then echo "MISSING secret: $name"; missing=1; fi
           done
           if [ "$missing" -ne 0 ]; then
-            echo "Deploy needs DEPLOY_HOST, DEPLOY_USER and DEPLOY_SSH_KEY in the"
-            echo "production environment's Actions secrets. Nothing was deployed."
+            echo "Deploy needs DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY and"
+            echo "DEPLOY_KNOWN_HOSTS in the production environment's Actions"
+            echo "secrets. Nothing was deployed."
             exit 1
           fi
 
@@ -52,14 +54,21 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/governance-event-indexer' }}
           DEPLOY_REF: ${{ inputs.ref || github.sha }}
         run: |
           set -euo pipefail
           install -m 700 -d ~/.ssh
+          # The key and the pinned host key live only for this step.
+          cleanup() { rm -f ~/.ssh/id_deploy ~/.ssh/known_hosts; }
+          trap cleanup EXIT
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # A pinned host key, not ssh-keyscan: trust-on-first-use would accept
+          # a man-in-the-middle exactly when the deploy key is in play.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
           ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes "$DEPLOY_USER@$DEPLOY_HOST" \
             "set -euo pipefail
              cd '$DEPLOY_DIR'
