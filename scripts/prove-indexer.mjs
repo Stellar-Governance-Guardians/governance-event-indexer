@@ -72,10 +72,16 @@ expect(
   decoding.VERIFIED === expected.decoding.VERIFIED && decoding.UNVERIFIED === expected.decoding.UNVERIFIED,
   `expected decoding ${JSON.stringify(expected.decoding)}, got ${JSON.stringify(decoding)}`,
 );
-expect(
-  JSON.stringify(governors) === JSON.stringify(expected.governors),
-  `expected governors ${JSON.stringify(expected.governors)}, got ${JSON.stringify(governors)}`,
-);
+// Per key, never a serialised-object comparison: key order is not a value.
+for (const [governor, count] of Object.entries(expected.governors)) {
+  expect(
+    (governors[governor] ?? 0) === count,
+    `expected ${count} event(s) for governor ${governor}, got ${governors[governor] ?? 0}`,
+  );
+}
+for (const governor of Object.keys(governors)) {
+  expect(governor in expected.governors, `unexpected governor ${governor}`);
+}
 expect(
   JSON.stringify(nodes.map((n) => n.ledger)) === JSON.stringify(expected.ledgers),
   `expected ledgers ${JSON.stringify(expected.ledgers)}, got ${JSON.stringify(nodes.map((n) => n.ledger))}`,

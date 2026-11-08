@@ -106,8 +106,10 @@ jobs:
       - run: npm run build
       - name: unit tests (offline)
         run: npm run test:unit
+      - name: container decode comparator self-test
+        run: node scripts/check-container-decode.mjs --self-test
       - name: integration tests (local Postgres only)
-        run: npm run test:integration
+        run: bash scripts/ci-report "integration tests" -- npm run test:integration
       # Charter/evidence rule 7: no doc may cite a script, workflow or npm
       # script that does not exist. Offline and deterministic.
       - name: no phantom references in docs
@@ -121,7 +123,10 @@ jobs:
         run: OFFLINE=1 bash scripts/check-claims.sh
 
   container:
-    name: runtime image decodes with the pinned parser
+    # Honest name: this replays SAC fixtures, which a correct decoder keeps
+    # UNVERIFIED. It proves the pinned artifact is in the image and the decode
+    # path runs; it does not claim a VERIFIED governance decode.
+    name: runtime image replays fixtures with the pinned parser
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -161,9 +166,9 @@ jobs:
             -v "$PWD/tests/fixtures/replay:/fixtures:ro" \
             --entrypoint node governance-indexer:ci \
             dist/cli.js replay /fixtures --allow-unregistered
-      - name: assert decoded rows exist at the pinned parser version
+      - name: assert replayed rows are decoded at the pinned parser version
         run: |
-          docker run --rm --network host \
+          bash scripts/ci-report "container decode" -- docker run --rm --network host \
             -e DATABASE_URL="$DATABASE_URL" \
             -v "$PWD/scripts:/app/scripts:ro" \
             -v "$PWD/parser.lock:/app/parser.lock:ro" \

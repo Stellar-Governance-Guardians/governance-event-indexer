@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Publish a failing command's output as ONE annotation, so a red step is
+# diagnosable from the public Checks API (job logs need a token; annotations
+# do not). The command's exit status is preserved exactly.
+#
+# Usage: scripts/ci-report <label> -- <command...>
+#        <command> may print RESULT: lines; on success they become a notice.
+#
+# This is a wrapper, not a check: it never turns a failure into a pass.
+set -uo pipefail
+
+if [ "$#" -lt 3 ] || [ "$2" != "--" ]; then
+  echo "usage: ci-report <label> -- <command...>" >&2
+  exit 2
+fi
+
+label="$1"
+shift 2
+
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
+
+set +e
+"$@" 2>&1 | tee "$log"
+status=${PIPESTATUS[0]}
+set -e
+
+# Workflow commands: % -> %25, newline -> %0A, CR dropped. One line per record.
+encode() {
+  awk '{ gsub(/%/, "%25"); sub(/\r$/, ""); printf "%s%%0A", $0 }'
+}
+
+if [ "$status" -ne 0 ]; then
+  payload="$(tail -n 60 "$log" | encode)"
+  echo "::error title=${label}::${payload}"
+  exit "$status"
+fi
+
+notice="$(grep -E '^RESULT:' "$log" | tail -n 20 | encode || true)"
+if [ -n "$notice" ]; then
+  echo "::notice title=${label}::${notice}"
+fi
+exit 0
