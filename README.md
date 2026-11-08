@@ -30,7 +30,7 @@ governance events stored durably and queried without trusting a UI.
 ranges, idempotent keyed storage, restart-safe cursor commits, explicit
 retention-gap rows, fixture replay through the same raw-plus-decode path, and
 durable parser-backed event normalization with explicit unverified fallback —
-57 unit and 18 integration tests, three vendored pins hash-verified offline.
+59 unit and 18 integration tests, three vendored pins hash-verified offline.
 Evidence is in [claims.json](claims.json) and the
 [ingestion section](#ingestion-i2-built) below.
 

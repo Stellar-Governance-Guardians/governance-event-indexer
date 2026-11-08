@@ -42,5 +42,12 @@ describe('event keyset cursor', () => {
     expect(() =>
       parseCursor(Buffer.from(JSON.stringify([-1, 'x', 0, 0]), 'utf8').toString('base64url')),
     ).toThrow(/not a valid event cursor/);
+    // Negative op_index or event_index cannot name a row either.
+    expect(() =>
+      parseCursor(Buffer.from(JSON.stringify([1, 'x', -1, 0]), 'utf8').toString('base64url')),
+    ).toThrow(/not a valid event cursor/);
+    expect(() =>
+      parseCursor(Buffer.from(JSON.stringify([1, 'x', 0, -1]), 'utf8').toString('base64url')),
+    ).toThrow(/not a valid event cursor/);
   });
 });

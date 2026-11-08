@@ -74,8 +74,10 @@ export function parseCursor(after: string | null | undefined): EventCursor | und
     decoded[1] === '' ||
     typeof decoded[2] !== 'number' ||
     !Number.isSafeInteger(decoded[2]) ||
+    decoded[2] < 0 ||
     typeof decoded[3] !== 'number' ||
-    !Number.isSafeInteger(decoded[3])
+    !Number.isSafeInteger(decoded[3]) ||
+    decoded[3] < 0
   ) {
     throw new GraphQLError('after is not a valid event cursor');
   }
