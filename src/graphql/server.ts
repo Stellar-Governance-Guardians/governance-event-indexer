@@ -213,11 +213,18 @@ export function createGraphqlHttpServer(context: GraphqlContext, typeDefs: strin
     // every intentional failure below is a GraphQLError and passes through
     // unmasked (see docs/deploy.md, "Error responses").
     maskedErrors: {
+      // Yoga wraps a resolver failure in a located GraphQLError, so the
+      // client-safe error is the one the resolver actually threw. Testing
+      // only the outer object masked every intentional failure in practice.
       maskError: (error: unknown, message: string) => {
-        if (error instanceof GraphQLError) return error;
+        const candidate =
+          error instanceof Error && 'originalError' in error
+            ? (error as { originalError?: unknown }).originalError ?? error
+            : error;
+        if (candidate instanceof GraphQLError) return candidate;
         return new GraphQLError(message, {
           extensions: { code: 'INTERNAL_SERVER_ERROR', unexpected: true },
-          originalError: error instanceof Error ? error : undefined,
+          originalError: candidate instanceof Error ? candidate : undefined,
         });
       },
     },
