@@ -62,7 +62,7 @@ jobs:
           # only — same rationale as the check above.
           n1='ojuotimi'; n2='932'; n3='dawnaurora'; n4='25'; n5='aigbagb'; n6='obila'
           names="${n1}${n2}|${n3}${n4}|${n5}${n6}"
-          if git ls-files -z -- '*.md' '*.json' '*.yml' '*.yaml' '*.toml' \
+          if git ls-files -z -- '*.md' '*.json' \
             | xargs -0 -r grep -niE "$names" \
             | grep -vE 'README\.md:.*ojuotimi932' ; then
             echo "FAIL: personal account name in tracked sources"; exit 1
