@@ -185,8 +185,18 @@ describe('not-yet-built resolvers', () => {
           'query { executionImpact(proposalId: "1", governorContract: "C") { estimate } }',
         ]) {
           const result = await graphql({ schema, source, contextValue: ctx });
-          expect(result.data).toBeNull();
-          expect(result.errors?.[0]?.message).toMatch(/is unavailable: decoded governance tables are not populated yet/);
+          // The SDL declares these fields nullable, so graphql-js nulls the
+          // field rather than the whole data object. What matters is that the
+          // resolver raises instead of fabricating an empty result.
+          expect(result.errors?.[0]?.message).toMatch(
+            /is unavailable: decoded governance tables are not populated yet/,
+          );
+          // Non-null SDL fields null the whole data object; nullable ones are
+          // nulled individually. Either way no fabricated value may appear.
+          expect(
+            result.data === null ||
+              Object.values(result.data).every((value) => value === null),
+          ).toBe(true);
         }
       });
     });
