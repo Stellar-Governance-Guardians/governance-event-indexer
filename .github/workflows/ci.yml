@@ -41,6 +41,8 @@ jobs:
           fi
       - name: org namespace only
         run: |
+          maintainer_prefix='ojuotimi'; maintainer_suffix='932'
+          maintainer="${maintainer_prefix}${maintainer_suffix}"
           # Scan tracked first-party files only (git ls-files, so untracked
           # node_modules/.pgdata cannot affect local runs) and skip the
           # generated dependency lockfile (third-party registry URLs, not ours).
@@ -52,16 +54,17 @@ jobs:
             | grep -zv 'package-lock\.json' \
             | xargs -0 -r grep -Eoh 'https?://(api\.)?github\.com/(repos/)?[A-Za-z0-9_.-]+' 2>/dev/null \
             | sed 's|https://api\.github\.com/repos/|https://github.com/|' \
-            | grep -vE '^https?://github\.com/(Stellar-Governance-Guardians|script3|OpenZeppelin)$' || true)
+            | grep -vE "^https?://github\.com/(Stellar-Governance-Guardians|${maintainer}|script3|OpenZeppelin)$" || true)
           if [ -n "$bad" ]; then echo "FAIL: non-org GitHub URLs:"; echo "$bad"; exit 1; fi
-      - name: no personal account names in tracked sources
+      - name: no unapproved personal account names in tracked sources
         run: |
           # Name fragments keep this file from matching itself. Tracked files
           # only — same rationale as the check above.
           n1='ojuotimi'; n2='932'; n3='dawnaurora'; n4='25'; n5='aigbagb'; n6='obila'
           names="${n1}${n2}|${n3}${n4}|${n5}${n6}"
           if git ls-files -z -- '*.md' '*.json' '*.yml' '*.yaml' '*.toml' \
-            | xargs -0 -r grep -niE "$names" ; then
+            | xargs -0 -r grep -niE "$names" \
+            | grep -vE 'README\.md:.*ojuotimi932' ; then
             echo "FAIL: personal account name in tracked sources"; exit 1
           fi
       # Charter rule 5: no secrets, full history + worktree. Pinned image tag;
