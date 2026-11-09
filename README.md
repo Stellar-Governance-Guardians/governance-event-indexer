@@ -1,11 +1,37 @@
 # Governance Event Indexer
 
-[![CI](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/actions/workflows/ci.yml/badge.svg)](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">
+  <b>Governance events, stored durably and queryable without trusting a UI.</b><br>
+  Raw <code>getEvents</code> responses land in Postgres, the pinned parser WASM decodes them, and a read-only GraphQL surface serves the result.
+</p>
+<p align="center">
+  <a href="https://github.com/Stellar-Governance-Guardians/governance-event-indexer/actions/workflows/ci.yml"><img src="https://github.com/Stellar-Governance-Guardians/governance-event-indexer/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license"></a>
+</p>
+<p align="center">
+  <a href="https://stellar-governance-guardians.github.io/soroban-governance-parser/"><strong>Documentation</strong></a> ·
+  <a href="#quick-start"><strong>Quick start</strong></a> ·
+  <a href="#pinned-artifacts-interface-contract"><strong>Pins</strong></a> ·
+  <a href="https://github.com/Stellar-Governance-Guardians/governance-event-indexer/issues"><strong>Issues</strong></a>
+</p>
 
-Maintained by [Stellar Governance Guardians](https://github.com/Stellar-Governance-Guardians).
-Use [GitHub Issues](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/issues)
-for project discussion, bug reports, and contribution requests.
+> [!IMPORTANT]
+> **Built and integration-tested locally, not yet deployed.** No live deployment has indexed a
+> ledger, decoded proposal/action tables and reconciliation (I5) are not built, and the PR gate is
+> offline and deterministic. Live-testnet checks run nightly and never block a merge.
+
+| | |
+|---|---|
+| What it is | Postgres + GraphQL indexer for Soroban governance events on Stellar testnet |
+| Pipeline | windowed `getEvents` → `raw_events` → pinned parser WASM → `decoded_events` → read-only GraphQL |
+| Surface | `governance-v1` GraphQL (events, `indexerHealth`) and `/health` |
+| Pins | `schema.lock`, `registry.lock`, `parser.lock` — hash-verified offline in every PR |
+| Tests | 59 unit and 18 integration tests, local Postgres only |
+| Documentation | <https://stellar-governance-guardians.github.io/soroban-governance-parser/> |
+| Suite | [parser](https://github.com/Stellar-Governance-Guardians/soroban-governance-parser) → [indexer](https://github.com/Stellar-Governance-Guardians/governance-event-indexer) → [dashboard](https://github.com/Stellar-Governance-Guardians/delegate-portal-dashboard) |
+| License | [MIT](LICENSE) |
+
+## Overview
 
 Indexes Soroban governance events from the public Stellar testnet RPC into
 Postgres. Raw events land first, then pinned parser WASM produces a durable,
@@ -231,10 +257,24 @@ locally. Integration tests require the Postgres service described in Quick
 start. Report security issues through [SECURITY.md](SECURITY.md), not a public
 issue.
 
-## Community and contributors
+## 🤝 Community & maintainers
 
-Project discussion happens in [GitHub Issues](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/issues)
-and pull requests.
+Join the discussion and get support:
+
+- **Telegram**: [t.me/+OmwD30ukO0wzZWU0](https://t.me/+OmwD30ukO0wzZWU0)
+- **Discord**: [discord.gg/UPbr5FFjX](https://discord.gg/UPbr5FFjX)
+- **Issues and task work**: [governance-event-indexer issues](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/issues)
+- **Documentation hub**: <https://stellar-governance-guardians.github.io/soroban-governance-parser/>
+- **The other repositories**: [soroban-governance-parser](https://github.com/Stellar-Governance-Guardians/soroban-governance-parser)
+  (decoding) and [delegate-portal-dashboard](https://github.com/Stellar-Governance-Guardians/delegate-portal-dashboard)
+  (read-only dashboard)
+
+| Maintainer | Role | Scope |
+|---|---|---|
+| [Stellar-Governance-Guardians](https://github.com/Stellar-Governance-Guardians) | Organization maintainers | Everything, via [CODEOWNERS](.github/CODEOWNERS) |
+
+The project is maintained in the organization namespace; personal accounts are not contact
+points for this repository.
 
 [![Contributors](https://contrib.rocks/image?repo=Stellar-Governance-Guardians/governance-event-indexer)](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/graphs/contributors)
 
