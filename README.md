@@ -271,7 +271,7 @@ Join the discussion and get support:
 
 | Maintainer | Role | Scope |
 |---|---|---|
-| [Stellar-Governance-Guardians](https://github.com/Stellar-Governance-Guardians) | Organization maintainers | Everything, via [CODEOWNERS](.github/CODEOWNERS) |
+| @ojuotimi932| Organization maintainers | Everything, via [CODEOWNERS](.github/CODEOWNERS) |
 
 The project is maintained in the organization namespace; personal accounts are not contact
 points for this repository.
