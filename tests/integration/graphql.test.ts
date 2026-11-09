@@ -193,10 +193,8 @@ describe('not-yet-built resolvers', () => {
           );
           // Non-null SDL fields null the whole data object; nullable ones are
           // nulled individually. Either way no fabricated value may appear.
-          expect(
-            result.data === null ||
-              Object.values(result.data).every((value) => value === null),
-          ).toBe(true);
+          const data = result.data ?? {};
+          expect(Object.values(data).every((value) => value === null)).toBe(true);
         }
       });
     });
