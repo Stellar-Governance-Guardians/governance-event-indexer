@@ -56,6 +56,24 @@ export interface DecodedEventsTable {
   decoded_at: ColumnType<Date, string | Date | undefined, string | Date>;
 }
 
+export interface ProposalsTable {
+  /** Governor contract that emitted `proposal_created`. Part of the identity. */
+  contract_id: string;
+  /** Adapter id reported by the pinned parser (`script3`, …). */
+  governor: string;
+  /** Canonical proposal id as the adapter renders it (decimal string for Script3). */
+  proposal_id: string;
+  created_ledger: number;
+  created_tx_hash: string;
+  proposer: string | null;
+  title: string | null;
+  /** parser `DecodedCall[]`, kept verbatim for provenance-mapped reads. */
+  calls: ColumnType<unknown, string, string>;
+  decoding: DecodingStatus;
+  parser_version: string;
+  projected_at: ColumnType<Date, string | Date | undefined, string | Date>;
+}
+
 export interface IngestCursorsTable {
   contract_id: string;
   last_ledger: number;
@@ -77,6 +95,7 @@ export interface Database {
   indexer_meta: IndexerMetaTable;
   raw_events: RawEventsTable;
   decoded_events: DecodedEventsTable;
+  proposals: ProposalsTable;
   ingest_cursors: IngestCursorsTable;
   ingest_gaps: IngestGapsTable;
 }

@@ -13,10 +13,11 @@ the Stellar Wave.
 
 ## Readiness classification
 
-- **01 Persist parser-backed normalization:** technically scoped, but the
-  current repository already contains the event-level normalization work. Do
-  not offer this draft as new work without first comparing it with `main` and
-  narrowing the remaining proposal/action projection scope.
+- **01 Persist parser-backed normalization:** delivered. Event-level
+  normalization (I3) and the verified `proposal_created` → `proposals`
+  projection (I5) are on `main` and served by the `proposal` query. Do not offer
+  this draft as new work; the remaining scope is vote/tally and delegate
+  projection, which needs its own issue and capture requirements.
 - **02 Reconciliation and health drift:** not ready until verified decoded
   proposal rows exist. It should remain a follow-up issue with fixture and
   provenance requirements.

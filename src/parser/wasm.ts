@@ -5,6 +5,25 @@ import { readFileSync } from 'node:fs';
 interface ParserWasm {
   matches_event(contractId: string, ledger: number, txHash: string, topicsJson: string, value: string): boolean;
   normalize_event(contractId: string, ledger: number, txHash: string, topicsJson: string, value: string): string;
+  script3_decode_proposal(stateJson: string, riskContextJson: string): string;
+}
+
+/** One `DecodedCall` exactly as the pinned parser serializes it. */
+export interface DecodedCallJson {
+  contract_id: string;
+  function_name: string;
+  arguments: unknown;
+  decoding: 'verified' | 'unverified';
+  risk: { tier: string; matched_rule: string; verified: boolean };
+}
+
+/** One `DecodedProposal` exactly as the pinned parser serializes it. */
+export interface DecodedProposalJson {
+  governor: string;
+  proposal_id: string;
+  proposer: string | null;
+  calls: DecodedCallJson[];
+  decoding: 'verified' | 'unverified';
 }
 
 export interface NormalizedGraphqlEvent {
@@ -90,6 +109,50 @@ export function normalizeStoredEvent(row: {
   } catch (error) {
     return unverified(row, `pinned parser normalization failed: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+export interface Script3ProposalStateForDecode {
+  proposal_id: number;
+  title: string;
+  description: string;
+  creator: string;
+  action: unknown;
+  vote_start: number;
+  vote_end: number;
+}
+
+/**
+ * Decode a Script3 proposal into `DecodedProposal` through the pinned parser.
+ * The state passed to the parser is reconstructed from a verified
+ * `proposal_created` event; only `action` feeds the decoded calls, and every
+ * risk classification comes from the parser's published rule table — this
+ * module never assigns a risk tier itself.
+ *
+ * `risk_context_json` defaults to `{}` (no contextual rules fire) because the
+ * indexer has no treasury/delegate configuration to inject.
+ */
+export function decodeScript3Proposal(
+  state: Script3ProposalStateForDecode,
+  riskContextJson = '{}',
+): DecodedProposalJson {
+  const parser = loadParser();
+  const encoded = JSON.stringify({
+    governor: 'script3',
+    proposal_id: state.proposal_id,
+    title: state.title,
+    description: state.description,
+    creator: state.creator,
+    action: state.action,
+    // Not projected and never served by the GraphQL `proposal` field; the
+    // parser requires the enum, and `open` is the state `proposal_created`
+    // itself implies. Nothing downstream reads it.
+    status: 'open',
+    executable: false,
+    vote_start: state.vote_start,
+    vote_end: state.vote_end,
+    eta: 0,
+  });
+  return JSON.parse(parser.script3_decode_proposal(encoded, riskContextJson)) as DecodedProposalJson;
 }
 
 export interface DecodedEventRecord {

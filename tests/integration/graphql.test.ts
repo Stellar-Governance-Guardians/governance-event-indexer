@@ -180,7 +180,6 @@ describe('not-yet-built resolvers', () => {
         await seed(db);
         const ctx = context(db);
         for (const source of [
-          'query { proposal(proposalId: "1", governorContract: "C") { governor } }',
           'query { delegateMetrics(delegate: "G") { votesCast } }',
           'query { executionImpact(proposalId: "1", governorContract: "C") { estimate } }',
         ]) {

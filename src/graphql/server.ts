@@ -36,6 +36,74 @@ function failUnavailable(field: string): never {
   throw new GraphQLError(`${field} is unavailable: decoded governance tables are not populated yet`);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const RISK_TIERS = new Set(['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'UNVERIFIED']);
+
+/**
+ * Map one parser `DecodedCall` (snake_case, `matched_rule`) onto the vendored
+ * SDL's `DecodedCall` (camelCase, enum tier). Fail loud on an unknown tier:
+ * a new parser tier must be published in the SDL, never silently downgraded.
+ */
+function toGraphqlCall(value: unknown) {
+  if (!isRecord(value)) throw new GraphQLError('proposals.calls contains a non-object entry');
+  const { contract_id: contractId, function_name: functionName, arguments: args, decoding } = value;
+  if (typeof contractId !== 'string' || typeof functionName !== 'string') {
+    throw new GraphQLError('proposals.calls entry is missing contract_id or function_name');
+  }
+  if (decoding !== 'verified' && decoding !== 'unverified') {
+    throw new GraphQLError('proposals.calls entry has an unknown decoding status');
+  }
+  const risk = value['risk'];
+  if (!isRecord(risk)) throw new GraphQLError('proposals.calls entry is missing its risk classification');
+  const tier = risk['tier'];
+  if (typeof tier !== 'string' || !RISK_TIERS.has(tier.toUpperCase())) {
+    throw new GraphQLError(`proposals.calls entry has an unknown risk tier: ${JSON.stringify(tier)}`);
+  }
+  if (typeof risk['matched_rule'] !== 'string' || typeof risk['verified'] !== 'boolean') {
+    throw new GraphQLError('proposals.calls entry has an incomplete risk classification');
+  }
+  // `arguments` is non-null in the SDL. A missing value is a corrupt projection,
+  // not an empty call — fail loudly rather than serving a null that graphql-js
+  // would only report as a generic non-null violation.
+  if (args === undefined) {
+    throw new GraphQLError('proposals.calls entry has no arguments value');
+  }
+  return {
+    contractId,
+    functionName,
+    arguments: args,
+    decoding: decoding === 'verified' ? 'VERIFIED' : 'UNVERIFIED',
+    risk: {
+      tier: tier.toUpperCase(),
+      matchedRule: risk['matched_rule'],
+      verified: risk['verified'],
+    },
+  };
+}
+
+/** Map a `proposals` row onto the SDL's `DecodedProposal`. */
+function toGraphqlProposal(row: {
+  governor: string;
+  proposal_id: string;
+  proposer: string | null;
+  calls: unknown;
+  decoding: 'VERIFIED' | 'UNVERIFIED';
+}) {
+  if (!Array.isArray(row.calls)) {
+    throw new GraphQLError('proposals.calls is not a JSON array');
+  }
+  return {
+    governor: row.governor,
+    proposalId: row.proposal_id,
+    proposer: row.proposer,
+    calls: row.calls.map(toGraphqlCall),
+    decoding: row.decoding,
+  };
+}
+
 /** The stable key a keyset cursor is built from. Ordering matches the index. */
 export interface EventCursor {
   ledger: number;
@@ -183,7 +251,22 @@ export function buildGraphqlSchema(typeDefs: string): GraphQLSchema {
             },
           };
         },
-        proposal: () => failUnavailable('proposal'),
+        proposal: async (
+          _root: unknown,
+          args: { proposalId: string; governorContract: string },
+          context: GraphqlContext,
+        ) => {
+          // Identity is (contract, id): the same numeric id exists on every
+          // governor, so neither argument is optional. An indexed proposal that
+          // does not exist returns null; it is never synthesized from events.
+          const row = await context.db
+            .selectFrom('proposals')
+            .select(['governor', 'proposal_id', 'proposer', 'calls', 'decoding'])
+            .where('contract_id', '=', args.governorContract)
+            .where('proposal_id', '=', args.proposalId)
+            .executeTakeFirst();
+          return row === undefined ? null : toGraphqlProposal(row);
+        },
         executionImpact: () => failUnavailable('executionImpact'),
         delegateMetrics: () => failUnavailable('delegateMetrics'),
         indexerHealth: async (_root: unknown, _args: unknown, context: GraphqlContext) => {

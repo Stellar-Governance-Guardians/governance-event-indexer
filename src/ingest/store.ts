@@ -7,7 +7,8 @@
 import { sql, type Kysely, type Transaction } from 'kysely';
 import type { Database, EventSource } from '../db/index.js';
 import type { RawEventRow } from './normalize.js';
-import { decodeStoredEvent } from '../parser/wasm.js';
+import { decodeStoredEvent, type DecodedEventRecord } from '../parser/wasm.js';
+import { projectProposal } from './project.js';
 
 export type Db = Kysely<Database> | Transaction<Database>;
 
@@ -41,33 +42,49 @@ export async function insertRawEvents(db: Db, rows: readonly RawEventRow[]): Pro
   return Number(result?.numInsertedOrUpdatedRows ?? 0);
 }
 
-export async function persistDecodedEvents(db: Db, rows: readonly RawEventRow[]): Promise<void> {
-  if (rows.length === 0) return;
+export interface StoredDecode {
+  raw: RawEventRow;
+  decoded: DecodedEventRecord;
+}
+
+/**
+ * Decode a batch once, folding duplicate keys (Postgres rejects a VALUES list
+ * that touches the same key twice). The result feeds both `decoded_events`
+ * and the proposal projection, so the two can never disagree about what one
+ * event decoded to.
+ */
+export function buildDecodeRecords(rows: readonly RawEventRow[]): StoredDecode[] {
   const unique = new Map<string, RawEventRow>();
   for (const row of rows) unique.set(`${row.ledger}|${row.tx_hash}|${row.op_index}|${row.event_index}`, row);
+  return [...unique.values()].map((raw) => ({
+    raw,
+    decoded: decodeStoredEvent({
+      contractId: raw.contract_id,
+      ledger: raw.ledger,
+      txHash: raw.tx_hash,
+      topics: raw.topics,
+      value: raw.value,
+      source: raw.source,
+    }),
+  }));
+}
+
+export async function persistDecodedEvents(db: Db, rows: readonly RawEventRow[]): Promise<StoredDecode[]> {
+  const records = buildDecodeRecords(rows);
+  if (records.length === 0) return [];
   await db
     .insertInto('decoded_events')
-    .values([...unique.values()].map((row) => {
-      const decoded = decodeStoredEvent({
-        contractId: row.contract_id,
-        ledger: row.ledger,
-        txHash: row.tx_hash,
-        topics: row.topics,
-        value: row.value,
-        source: row.source,
-      });
-      return {
-        ledger: row.ledger,
-        tx_hash: row.tx_hash,
-        op_index: row.op_index,
-        event_index: row.event_index,
-        parser_version: decoded.parserVersion,
-        governor: decoded.governor,
-        topics: JSON.stringify(decoded.topics),
-        payload: JSON.stringify(decoded.payload),
-        decoding: decoded.decoding,
-      };
-    }))
+    .values(records.map(({ raw, decoded }) => ({
+      ledger: raw.ledger,
+      tx_hash: raw.tx_hash,
+      op_index: raw.op_index,
+      event_index: raw.event_index,
+      parser_version: decoded.parserVersion,
+      governor: decoded.governor,
+      topics: JSON.stringify(decoded.topics),
+      payload: JSON.stringify(decoded.payload),
+      decoding: decoded.decoding,
+    })))
     .onConflict((oc) => oc.columns([...RAW_EVENT_KEY]).doUpdateSet({
       parser_version: sql`excluded.parser_version`,
       governor: sql`excluded.governor`,
@@ -77,6 +94,37 @@ export async function persistDecodedEvents(db: Db, rows: readonly RawEventRow[])
       decoded_at: sql`now()`,
     }))
     .execute();
+  return records;
+}
+
+/**
+ * Persist the proposal projection for a batch of decode records. Idempotent:
+ * re-processing the same event refreshes calls/decoding (a parser pin bump can
+ * improve them) while `proposal_created` remains the only source of identity.
+ *
+ * Returns the number of proposal rows projected.
+ */
+export async function persistProposals(db: Db, records: readonly StoredDecode[]): Promise<number> {
+  const projections = records
+    .map(({ raw, decoded }) => projectProposal(raw, decoded))
+    .filter((p): p is NonNullable<typeof p> => p !== undefined);
+  if (projections.length === 0) return 0;
+  await db
+    .insertInto('proposals')
+    .values(projections.map((p) => ({ ...p, calls: JSON.stringify(p.calls) })))
+    .onConflict((oc) => oc.columns(['contract_id', 'proposal_id']).doUpdateSet({
+      governor: sql`excluded.governor`,
+      created_ledger: sql`excluded.created_ledger`,
+      created_tx_hash: sql`excluded.created_tx_hash`,
+      proposer: sql`excluded.proposer`,
+      title: sql`excluded.title`,
+      calls: sql`excluded.calls`,
+      decoding: sql`excluded.decoding`,
+      parser_version: sql`excluded.parser_version`,
+      projected_at: sql`now()`,
+    }))
+    .execute();
+  return projections.length;
 }
 
 export async function getCursor(db: Db, contractId: string): Promise<number | undefined> {
@@ -157,7 +205,8 @@ export async function commitWindow(
 ): Promise<number> {
   return db.transaction().execute(async (trx) => {
     const inserted = await insertRawEvents(trx, args.rows);
-    await persistDecodedEvents(trx, args.rows);
+    const decoded = await persistDecodedEvents(trx, args.rows);
+    await persistProposals(trx, decoded);
     await advanceCursor(trx, args.contractId, args.windowEnd);
     return inserted;
   });
