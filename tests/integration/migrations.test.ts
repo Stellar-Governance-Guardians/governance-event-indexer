@@ -12,7 +12,12 @@ describe('migrations', () => {
   it('applies from an empty database and is idempotent', async () => {
     await withTempDatabase(async (url) => {
       const first = await withDatabase(url, (db) => runMigrations(db));
-      expect(first.applied).toEqual(['0001_init', '0002_ingest', '0003_decode']);
+      expect(first.applied).toEqual([
+        '0001_init',
+        '0002_ingest',
+        '0003_decode',
+        '0004_proposals',
+      ]);
 
       const second = await withDatabase(url, (db) => runMigrations(db));
       expect(second.applied).toEqual([]);
@@ -33,6 +38,7 @@ describe('migrations', () => {
           'indexer_meta',
           'ingest_cursors',
           'ingest_gaps',
+          'proposals',
           'raw_events',
         ]);
       });

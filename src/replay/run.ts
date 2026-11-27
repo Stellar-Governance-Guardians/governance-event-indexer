@@ -18,7 +18,7 @@ import type { Database } from '../db/index.js';
 import type { GovernorRegistry } from '../registry/index.js';
 import { parseGetEventsResult } from '../rpc/client.js';
 import { toRawEventRow, type RawEventRow } from '../ingest/normalize.js';
-import { insertRawEvents, persistDecodedEvents } from '../ingest/store.js';
+import { insertRawEvents, persistDecodedEvents, persistProposals } from '../ingest/store.js';
 
 export class ReplayError extends Error {
   override readonly name = 'ReplayError';
@@ -90,7 +90,8 @@ export async function replayFixtureFile(
 
   const inserted = await db.transaction().execute(async (trx) => {
     const count = await insertRawEvents(trx, rows);
-    await persistDecodedEvents(trx, rows);
+    const decoded = await persistDecodedEvents(trx, rows);
+    await persistProposals(trx, decoded);
     return count;
   });
   return {

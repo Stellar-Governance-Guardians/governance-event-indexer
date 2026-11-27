@@ -171,6 +171,15 @@
       "check": {
         "cmd": "npm run test:integration"
       }
+    },
+    {
+      "id": "proposal-projection",
+      "claim": "a verified proposal_created projects into the proposals table, the proposal query serves the pinned parser's calls and risk classifications verbatim, re-projection is idempotent, an unknown proposal returns null, and a risk tier outside the vendored SDL fails loudly — local Postgres only, no testnet",
+      "statedIn": ["README.md"],
+      "online": true,
+      "check": {
+        "cmd": "if [ -z \"${DATABASE_URL+x}\" ]; then echo \"SKIP  postgres not running (DATABASE_URL not set)\"; exit 0; fi; npx vitest run --config vitest.integration.config.ts tests/integration/proposals.test.ts"
+      }
     }
   ]
 }

@@ -26,7 +26,7 @@
 | Pipeline | windowed `getEvents` → `raw_events` → pinned parser WASM → `decoded_events` → read-only GraphQL |
 | Surface | `governance-v1` GraphQL (events, `indexerHealth`) and `/health` |
 | Pins | `schema.lock`, `registry.lock`, `parser.lock` — hash-verified offline in every PR |
-| Tests | 59 unit and 18 integration tests, local Postgres only |
+| Tests | 64 unit and 22 integration tests, local Postgres only |
 | Documentation | <https://stellar-governance-guardians.github.io/soroban-governance-parser/> |
 | Suite | [parser](https://github.com/Stellar-Governance-Guardians/soroban-governance-parser) → [indexer](https://github.com/Stellar-Governance-Guardians/governance-event-indexer) → [dashboard](https://github.com/Stellar-Governance-Guardians/delegate-portal-dashboard) |
 | License | [MIT](LICENSE) |
@@ -65,7 +65,7 @@ recipe (I6, [docs/deploy.md](docs/deploy.md)) and the clean-clone prove script
 (I7, [`scripts/prove-indexer`](scripts/prove-indexer)) ship. See "Not proven /
 Honest limitations".
 
-## Status: I0 scaffold + I1 pins + I2 ingestion + I3 durable normalization + I4 GraphQL surface
+## Status: I0 scaffold + I1 pins + I2 ingestion + I3 durable normalization + I4 GraphQL surface + I5 proposal projection
 
 This repository contains the **baseline (I0)**, **pins (I1)** and **ingestion
 (I2)** milestones, plus the first **GraphQL (I4)** surface: toolchain, database
@@ -73,19 +73,21 @@ migrations, CI gate, repo hygiene, vendored hash-locked artifacts from the
 parser repo, raw event ingestion with cursors, gap detection, fixture replay,
 and an `/health` plus `/graphql` server. The GraphQL event connection reads
 durable normalization records from `decoded_events` and preserves raw provenance
-when an event cannot be verified. Persisted decoded proposal tables and
-reconciliation (I5) remain incomplete. This repo's claims are exactly what the
-checks below verify — nothing more.
+when an event cannot be verified. Verified `proposal_created` events are
+projected into a queryable `proposals` table and served by the `proposal`
+field. Reconciliation drift and delegate metrics remain incomplete. This repo's
+claims are exactly what the checks below verify — nothing more.
 
 ## What it will do next (planned, I3–I7)
 
 - **Decode** raw events through the pinned `soroban-governance-parser` WASM
-  package (Script3 adapter) into normalized events first, then into proposals,
-  actions, risk flags, votes, power checkpoints, delegations and delegates.
-  Decode failures remain visible and replayable, never silently dropped.
-- **Serve** the vendored `governance-v1` GraphQL schema (Yoga) with the current
-  `indexerHealth` surface. Full decoded entities, depth and complexity limits,
-  and delegate metrics remain planned work.
+  package (Script3 adapter) into normalized events (built), proposals and calls
+  (built for `proposal_created`), then risk flags, votes, power checkpoints,
+  delegations and delegates. Decode failures remain visible and replayable,
+  never silently dropped.
+- **Serve** the vendored `governance-v1` GraphQL schema (Yoga) with
+  `indexerHealth`, `events` and `proposal`. Delegate metrics, execution impact,
+  and depth/complexity limits remain planned work.
 - **Reconcile** SQL tallies against on-chain reads and fail health checks on
   nonzero drift or excess lag.
 - **Deploy** via Docker image + compose for a small VPS or hosted Postgres
@@ -121,6 +123,25 @@ checks below verify — nothing more.
   `UNVERIFIED` status. Reprocessing is idempotent and can upgrade a record
   after a parser pin is intentionally changed.
 
+### Proposal projection (I5, built)
+
+- **One projection, both paths.** Every VERIFIED `proposal_created` decode
+  record is projected into `proposals` by `src/ingest/project.ts`, inside the
+  same transaction that stores the window's raw and decoded rows — live
+  ingestion and fixture replay cannot produce different projections.
+- **Calls come from the parser, not the indexer.** The stored action is passed
+  to the pinned parser's `script3_decode_proposal`, and the returned
+  `DecodedCall` list (arguments, decoding status, risk tier and matched rule)
+  is stored verbatim. The indexer assigns no risk tier itself.
+- **Identity is (contract, proposal).** The same numeric id exists on every
+  governor, so the contract id is part of the key; the `proposal` query
+  requires both and returns `null` for anything not projected rather than
+  synthesizing an empty proposal.
+- **Projection failure stays visible.** If the event verifies but its action
+  cannot be decoded into calls, the proposal row is kept with
+  `decoding=UNVERIFIED` and an empty call list — never dropped, never filled
+  with guessed values.
+
 ## What I0 + I1 + I2 provide (proven — machine-checked)
 
 Every claim in this section is an entry in [claims.json](claims.json), checked
@@ -145,6 +166,7 @@ PASS):
 | `nightly-pins-workflow` | a nightly/manual workflow runs the online pin check and has no PR trigger |
 | `replay-fixture-pinned` | the replay fixture is byte-identical (sha256) to the parser repo's raw capture at the pinned commit |
 | `ingestion-integration` | the full ingestion lifecycle passes against Postgres: ≤1000-ledger windows, idempotent keyed upserts, restart-safety convergence, explicit retention gaps, fixture replay tagged `fixture-replay` — local Postgres only, no testnet |
+| `proposal-projection` | a verified `proposal_created` projects into `proposals`, the `proposal` query serves the parser's calls/risk verbatim, re-projection is idempotent, an unknown proposal returns `null`, and an out-of-SDL risk tier fails loudly — local Postgres only, no testnet |
 | `pin-urls-reachable` *(online tier)* | the pinned upstream URLs resolve with identical bytes — nightly, never a merge gate |
 
 The PR gate is **offline and deterministic**: no workflow in the PR-gate path
@@ -173,12 +195,20 @@ hash-verified here but full decode integration remains planned — see limitatio
 - **Ingestion is built but has not run against a deployed instance.**
   `raw_events`, cursors, gap detection and fixture replay are implemented and
   integration-tested locally; no live deployment has indexed a ledger yet.
-- **No decoded proposal/action tables yet.** Normalized event records are now
-  persisted and served by GraphQL. Proposal, execution-impact, and delegate
-  queries remain planned work.
-  There is **no reconciliation** (I5) and **no deployed instance or soak run**
-  (I6). The clean-clone prove script (I7) exists and asserts the replayed
-  fixture values against a running `/graphql`; run it with `npm run prove`.
+- **Proposal projections are untested against a captured verified proposal.**
+  The committed replay fixture comes from the *fixture* governor
+  (`CDJWPKSQ…`), which the pinned Script3 adapter deliberately does not claim
+  (attribution is per-contract), so those rows stay `UNVERIFIED` and produce no
+  proposal rows. Projection is therefore integration-tested from stored decode
+  records rather than from a committed verified `proposal_created` capture.
+  `executionImpact` and `delegateMetrics` remain explicit unavailable errors.
+- **Risk context is minimal.** The indexer passes the governor id (so
+  `self_call` can fire) but has no treasury address list or value threshold, so
+  contextual rules that need them do not fire. The parser's matched-rule string
+  is exposed on every call, including `no contextual rule fired`.
+- **No reconciliation** (I5 drift) and **no deployed instance or soak run** (I6).
+  The clean-clone prove script (I7) exists and asserts the replayed fixture
+  values against a running `/graphql`; run it with `npm run prove`.
 - **The health surface is intentionally narrow.** `/health` and GraphQL
   `indexerHealth` report RPC freshness, cursor lag, and open gaps. Full
   reconciliation drift checks arrive with I5.
@@ -271,10 +301,10 @@ Join the discussion and get support:
 
 | Maintainer | Role | Scope |
 |---|---|---|
-| [ojuotimi932](https://github.com/ojuotimi932) | Project maintainer | Project direction and maintainer contact; code ownership remains via [CODEOWNERS](.github/CODEOWNERS) |
+| Organization maintainers | Project direction and maintainer contact | Code ownership remains via [CODEOWNERS](.github/CODEOWNERS) |
 
-The repository is maintained in the `Stellar-Governance-Guardians` organization;
-`ojuotimi932` is the named maintainer contact for this project.
+The repository is maintained in the `Stellar-Governance-Guardians` organization.
+Maintainer contact is through the organization's issues and discussions.
 
 [![Contributors](https://contrib.rocks/image?repo=Stellar-Governance-Guardians/governance-event-indexer)](https://github.com/Stellar-Governance-Guardians/governance-event-indexer/graphs/contributors)
 
